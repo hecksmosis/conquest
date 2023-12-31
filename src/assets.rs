@@ -44,7 +44,7 @@ fn load_textures(asset_server: Res<AssetServer>, mut assets: ResMut<TileAssets>)
         m.insert(
             (
                 TileType::Occupied(PlayerTile::Base, Terrain::None),
-                0,
+                1,
                 Some(*player),
             ),
             asset_server.load(format!("base-{}.png", player)),

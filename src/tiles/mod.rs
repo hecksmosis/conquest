@@ -26,7 +26,9 @@ pub struct Health(pub usize);
 
 impl Health {
     pub fn damage(&mut self) {
-        self.0 -= 1;
+        if self.0 > 0 {
+            self.0 -= 1;
+        }
     }
 }
 

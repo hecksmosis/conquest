@@ -50,13 +50,13 @@ impl TileBundle {
                     custom_size: Some(Vec2::splat(TILE_SIZE)),
                     ..default()
                 },
-                texture: assets.get(TileType::Occupied(PlayerTile::Base, Terrain::None), 0, Some(player)),
+                texture: assets.get(TileType::Occupied(PlayerTile::Base, Terrain::None), 1, Some(player)),
                 ..default()
             },
             tile: Tile(TileType::Occupied(PlayerTile::Base, Terrain::None)),
             owned: Owned(Some(player)),
             health: Health(2),
-            ..default()
+            level: Level(1),
         }
     }
 }

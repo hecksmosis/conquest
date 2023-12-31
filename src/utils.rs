@@ -1,3 +1,5 @@
+use std::usize;
+
 use crate::*;
 use bevy::window::PrimaryWindow;
 
@@ -25,10 +27,10 @@ pub fn get_vec_from_index(index: usize) -> Vec2 {
     )
 }
 
-pub fn attack_is_valid(origin: Vec2, target: Vec2, level: usize) -> bool {
+fn attack_is_valid(origin: Vec2, target: Vec2, level: usize) -> bool {
     let diff = target - origin;
 
-    info!("{}", diff);
+    info!("{}, level: {}", diff, level);
 
     match level {
         1 => [
@@ -38,6 +40,35 @@ pub fn attack_is_valid(origin: Vec2, target: Vec2, level: usize) -> bool {
             Vec2::new(0.0, -1.0),
         ]
         .contains(&diff),
+        2 => [
+            Vec2::new(1.0, 0.0),
+            Vec2::new(-1.0, 0.0),
+            Vec2::new(0.0, 1.0),
+            Vec2::new(0.0, -1.0),
+            Vec2::new(2.0, 0.0),
+            Vec2::new(-2.0, 0.0),
+            Vec2::new(0.0, 2.0),
+            Vec2::new(0.0, -2.0),
+        ].contains(&diff),
         _ => false,
     }
+}
+
+pub fn get_attack_targets(origin: Vec2, target: Vec2, level: usize) -> Vec<Vec2> {
+    if !attack_is_valid(origin, target, level) {
+        return vec![];
+    }
+
+    match level {
+        1 => vec![target],
+        
+        // Get attack direction and return tiles 2 and 1 away in that direction
+        2 => {
+            let diff = target - origin;
+            let direction = diff / diff.length();
+
+            vec![origin + direction, origin + direction * 2.0]
+        },
+        _ => vec![],
+    }   
 }

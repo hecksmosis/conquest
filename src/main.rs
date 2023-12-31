@@ -17,7 +17,7 @@ use strum::IntoEnumIterator;
 use terrain::TerrainPlugin;
 use tiles::*;
 use turn::*;
-use utils::{attack_is_valid, get_rectified_mouse_position, get_vec_from_index};
+use utils::{get_attack_targets, get_rectified_mouse_position, get_vec_from_index};
 
 mod assets;
 mod camera;
@@ -50,14 +50,14 @@ impl Into<Transform> for Position {
 #[derive(Resource)]
 pub struct AttackController {
     pub selected: Option<Vec2>,
-    pub selected_level: usize,
+    pub selected_level: Option<usize>,
 }
 
 impl Default for AttackController {
     fn default() -> Self {
         Self {
             selected: None,
-            selected_level: 0,
+            selected_level: None,
         }
     }
 }
@@ -65,12 +65,12 @@ impl Default for AttackController {
 impl AttackController {
     pub fn select(&mut self, position: Vec2, level: usize) {
         self.selected = Some(position);
-        self.selected_level = level;
+        self.selected_level = Some(level);
     }
 
     pub fn deselect(&mut self) {
         self.selected = None;
-        self.selected_level = 0;
+        self.selected_level = None;
     }
 }
 
@@ -109,13 +109,16 @@ fn main() {
             (
                 (
                     select_tile,
-                    eat_tile,
-                    create,
+                    tile_attack,
                     upgrade,
                     register_event,
-                    update_image,
+                    update_image.run_if(update_image_event),
                     update_selection,
-                    (delete_if_disconnected, update_grid).chain(),
+                    (
+                        delete_if_disconnected,
+                        update_grid.run_if(grid_update_event),
+                    )
+                        .chain(),
                 )
                     .run_if(in_state(GameState::Game)),
                 close_on_esc,
@@ -153,18 +156,35 @@ fn setup(mut commands: Commands, mut grid: ResMut<TileGrid>, assets: Res<TileAss
     });
 }
 
-#[derive(Event, Debug)]
+fn grid_update_event(mut grid_update: EventReader<GridUpdateEvent>) -> bool {
+    grid_update.read().count() == 0
+}
+
+fn update_image_event(mut update_image: EventReader<UpdateImageEvent>) -> bool {
+    update_image.read().count() == 0
+}
+
+#[derive(Event)]
 pub(crate) struct TurnEvent;
+
+#[derive(Event)]
+pub struct GridChangedEvent;
+
+#[derive(Event)]
+pub struct GridUpdateEvent;
+
+#[derive(Event)]
+pub struct UpdateImageEvent;
 
 #[derive(Event, Debug)]
 pub enum TileEvent {
-    CreateEvent(Vec2, PlayerTile),
     UpgradeEvent(Vec2, TileType),
     SelectEvent(Vec2),
     AttackEvent {
-        origin: Vec2,
+        origin: Option<Vec2>,
         target: Vec2,
-        level: usize,
+        attacker_level: usize,
+        player_tile: PlayerTile,
     },
 }
 
@@ -189,23 +209,23 @@ fn register_event(
     };
 
     match (tile.0.player_tile(), owner.0, button) {
-        (None, _, MouseButton::Left) => event.send(TileEvent::CreateEvent(
-            mouse.grid_position(),
-            PlayerTile::Tile,
-        )),
-        (Some(PlayerTile::Tile), Some(p), MouseButton::Right) if p == turn.player() => event.send(
-            TileEvent::CreateEvent(mouse.grid_position(), PlayerTile::Farm),
-        ),
+        (Some(PlayerTile::Tile), Some(p), MouseButton::Right) if p == turn.player() => {
+            event.send(TileEvent::AttackEvent {
+                origin: attack_controller.selected,
+                target: mouse.grid_position(),
+                attacker_level: attack_controller.selected_level.unwrap_or(1),
+                player_tile: PlayerTile::Farm,
+            })
+        }
         (Some(_), Some(p), MouseButton::Left) if p == turn.player() => {
             event.send(TileEvent::UpgradeEvent(mouse.grid_position(), tile.0))
         }
-        (Some(_), Some(p), MouseButton::Left) if p != turn.player() => {
-            event.send(TileEvent::AttackEvent {
-                origin: attack_controller.selected.unwrap_or(mouse.grid_position()),
-                target: mouse.grid_position(),
-                level: attack_controller.selected_level,
-            })
-        }
+        (.., MouseButton::Left) => event.send(TileEvent::AttackEvent {
+            origin: attack_controller.selected,
+            target: mouse.grid_position(),
+            attacker_level: attack_controller.selected_level.unwrap_or(1),
+            player_tile: PlayerTile::Tile,
+        }),
         _ => (),
     }
     buttons.clear();
@@ -238,67 +258,6 @@ fn select_tile(
     events.send(TileEvent::SelectEvent(mouse_position));
 }
 
-fn create(
-    mut tile_query: Query<(&Position, &mut Owned, &mut Tile, &mut Level, &mut Health)>,
-    turn: Res<TurnCounter>,
-    grid: ResMut<TileGrid>,
-    mut events: EventReader<TileEvent>,
-    mut update_image: EventWriter<UpdateImageEvent>,
-    turn_event: EventWriter<TurnEvent>,
-) {
-    let Some(&TileEvent::CreateEvent(selected_position, player_tile)) = events.read().next() else {
-        return;
-    };
-
-    if !grid.any_adjacent_tiles(selected_position, turn.player()) {
-        return;
-    }
-
-    if let Some((_, owner, tile, level, health)) = tile_query
-        .iter_mut()
-        .find(|(pos, ..)| pos.into_grid() == selected_position)
-    {
-        info!("Creating tile at {:?}", selected_position);
-        make_tile(
-            level,
-            tile,
-            owner,
-            health,
-            grid,
-            turn_event,
-            selected_position,
-            player_tile,
-            turn,
-        );
-
-        update_image.send(UpdateImageEvent);
-    }
-}
-
-fn make_tile(
-    mut level: Mut<Level>,
-    mut tile: Mut<Tile>,
-    mut owner: Mut<Owned>,
-    mut health: Mut<Health>,
-    mut grid: ResMut<TileGrid>,
-    mut turn_event: EventWriter<TurnEvent>,
-    selected_position: Vec2,
-    player_tile: PlayerTile,
-    turn: Res<TurnCounter>,
-) {
-    level.0 = 1;
-    tile.0.set_player_tile(player_tile);
-    health.0 = match tile.0.terrain() {
-        Terrain::Mountain => 2,
-        Terrain::None => 1,
-        _ => 0,
-    };
-    owner.0 = Some(turn.player());
-    grid.set_owner(selected_position, Some(turn.player()));
-
-    turn_event.send(TurnEvent);
-}
-
 fn upgrade(
     mut tile_query: Query<(&Position, &mut Level, &mut Health)>,
     mut events: EventReader<TileEvent>,
@@ -324,72 +283,66 @@ fn upgrade(
     }
 }
 
-#[derive(Event, Debug)]
-pub struct GridChangedEvent;
-
-#[derive(Event, Debug)]
-pub struct GridUpdateEvent;
-
-#[derive(Event)]
-pub struct UpdateImageEvent;
-
-fn eat_tile(
+fn tile_attack(
     mut tile_query: Query<(&Position, &mut Owned, &mut Tile, &mut Level, &mut Health)>,
-    mut changes: EventWriter<GridChangedEvent>,
     mut events: EventReader<TileEvent>,
+    mut changes: EventWriter<GridChangedEvent>,
     mut turn_event: EventWriter<TurnEvent>,
     mut update_image: EventWriter<UpdateImageEvent>,
+    mut grid: ResMut<TileGrid>,
     turn: Res<TurnCounter>,
-    grid: ResMut<TileGrid>,
 ) {
     let Some(&TileEvent::AttackEvent {
         origin,
         target,
-        level: attacker_level,
+        attacker_level,
+        player_tile,
     }) = events.read().next()
     else {
         return;
     };
 
-    let me = turn.player();
-    if !grid.any_adjacent_tiles(target, me) {
+    if origin.is_none() && !grid.any_adjacent_tiles(target, turn.player()) {
+        return;
+    }
+
+    let origin = origin.unwrap_or(
+        grid.get_connected_tiles(target, turn.player())
+            .first()
+            .map(|a| a.1)
+            .unwrap_or(Vec2::MAX), // Will never be reached
+    );
+    let targets = get_attack_targets(origin, target, attacker_level);
+
+    if targets.len() == 0 {
         return;
     }
 
     info!("Attacking tile at {:?} from {:?}", target, origin);
 
-    if let Some((_, owner, tile, level, mut health)) = tile_query
+    for (pos, mut owner, mut tile, mut level, mut health) in tile_query
         .iter_mut()
-        .find(|(pos, ..)| pos.into_grid() == target)
+        .filter(|(pos, ..)| targets.contains(&pos.into_grid()))
     {
-        if !attack_is_valid(origin, target, attacker_level) {
-            return;
-        }
-
-        info!("Damaged tile at {:?} from {:?}", target, origin);
-
         health.damage();
-
         if health.0 > 0 {
-            turn_event.send(TurnEvent);
-            return;
+            continue;
         }
 
-        make_tile(
-            level,
-            tile,
-            owner,
-            health,
-            grid,
-            turn_event,
-            target,
-            PlayerTile::Tile,
-            turn,
-        );
-
-        update_image.send(UpdateImageEvent);
-        changes.send(GridChangedEvent);
+        level.0 = 1;
+        tile.0.set_player_tile(player_tile);
+        health.0 = match tile.0.terrain() {
+            Terrain::Mountain => 2,
+            Terrain::None => 1,
+            _ => 0,
+        };
+        owner.0 = Some(turn.player());
+        grid.set_owner(pos.into_grid(), Some(turn.player()));
     }
+
+    turn_event.send(TurnEvent);
+    update_image.send(UpdateImageEvent);
+    changes.send(GridChangedEvent);
 }
 
 fn delete_if_disconnected(
@@ -421,17 +374,7 @@ fn delete_if_disconnected(
     }
 }
 
-fn update_grid(
-    mut tile_query: Query<(&Position, &Owned)>,
-    mut grid: ResMut<TileGrid>,
-    mut update: EventReader<GridUpdateEvent>,
-) {
-    if update.read().count() == 0 {
-        return;
-    }
-
-    info!("Received change notification, updating grid");
-
+fn update_grid(mut tile_query: Query<(&Position, &Owned)>, mut grid: ResMut<TileGrid>) {
     for (pos, owned) in tile_query.iter_mut() {
         grid.set_owner(pos.clone().into_grid(), owned.0);
     }
@@ -439,13 +382,8 @@ fn update_grid(
 
 fn update_image(
     mut tile_query: Query<(&mut Handle<Image>, &Tile, &Level, &Owned)>,
-    mut update_image: EventReader<UpdateImageEvent>,
     assets: Res<TileAssets>,
 ) {
-    if update_image.read().count() == 0 {
-        return;
-    }
-
     for (mut image, tile, level, owner) in tile_query.iter_mut() {
         *image = assets.get(tile.0, level.0, owner.0);
     }
@@ -458,14 +396,12 @@ fn update_selection(
     attack_controller: Res<AttackController>,
     mut selector_query: Query<(&mut Transform, &mut Visibility), With<Selector>>,
 ) {
-    if attack_controller.selected.is_none() {
+    let Some(selected_position) = attack_controller.selected else {
         for (_, mut visibility) in selector_query.iter_mut() {
             *visibility = Visibility::Hidden;
         }
         return;
-    }
-
-    let selected_position = attack_controller.selected.unwrap();
+    };
 
     for (mut transform, mut visibility) in selector_query.iter_mut() {
         *visibility = Visibility::Visible;
