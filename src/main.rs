@@ -112,6 +112,7 @@ fn main() {
                     create,
                     upgrade,
                     register_event,
+                    update_image,
                     (delete_if_disconnected, update_grid).chain(),
                 )
                     .run_if(in_state(GameState::Game)),
@@ -200,6 +201,7 @@ fn select_tile(
     mut attack_controller: ResMut<AttackController>,
     mut events: EventWriter<TileEvent>,
     mut tile_query: Query<(&Position, &Owned, &Tile, &Level)>,
+    mut update_image: EventWriter<UpdateImageEvent>,
     turn: Res<TurnCounter>,
 ) {
     if !keys.just_pressed(KeyCode::Space) {
@@ -218,22 +220,22 @@ fn select_tile(
 
     attack_controller.select(mouse_position, level);
 
+    update_image.send(UpdateImageEvent);
     events.send(TileEvent::SelectEvent(mouse_position));
 }
 
 fn create(
-    assets: Res<TileAssets>,
     mut tile_query: Query<(
         &Position,
         &mut Owned,
         &mut Tile,
         &mut Level,
         &mut Health,
-        &mut Handle<Image>,
     )>,
     turn: Res<TurnCounter>,
     grid: ResMut<TileGrid>,
     mut events: EventReader<TileEvent>,
+    mut update_image: EventWriter<UpdateImageEvent>,
     turn_event: EventWriter<TurnEvent>,
 ) {
     let Some(&TileEvent::CreateEvent(selected_position, player_tile)) = events.read().next() else {
@@ -244,7 +246,7 @@ fn create(
         return;
     }
 
-    if let Some((_, owner, tile, level, health, image)) = tile_query
+    if let Some((_, owner, tile, level, health)) = tile_query
         .iter_mut()
         .find(|(pos, ..)| pos.into_grid() == selected_position)
     {
@@ -254,14 +256,14 @@ fn create(
             tile,
             owner,
             health,
-            image,
             grid,
             turn_event,
             selected_position,
-            assets,
             player_tile,
             turn,
-        )
+        );
+
+        update_image.send(UpdateImageEvent);
     }
 }
 
@@ -270,11 +272,9 @@ fn make_tile(
     mut tile: Mut<Tile>,
     mut owner: Mut<Owned>,
     mut health: Mut<Health>,
-    mut image: Mut<Handle<Image>>,
     mut grid: ResMut<TileGrid>,
     mut turn_event: EventWriter<TurnEvent>,
     selected_position: Vec2,
-    assets: Res<TileAssets>,
     player_tile: PlayerTile,
     turn: Res<TurnCounter>,
 ) {
@@ -287,33 +287,31 @@ fn make_tile(
     };
     owner.0 = Some(turn.player());
     grid.set_owner(selected_position, Some(turn.player()));
-    *image = assets.get(tile.0, level.0, owner.0);
 
     turn_event.send(TurnEvent);
 }
 
 fn upgrade(
-    assets: Res<TileAssets>,
-    mut tile_query: Query<(&Position, &mut Level, &mut Health, &mut Handle<Image>)>,
+    mut tile_query: Query<(&Position, &mut Level, &mut Health)>,
     mut events: EventReader<TileEvent>,
     mut turn_event: EventWriter<TurnEvent>,
-    turn: Res<TurnCounter>,
+    mut update_image: EventWriter<UpdateImageEvent>,
 ) {
     let Some(&TileEvent::UpgradeEvent(selected_position, tile)) = events.read().next() else {
         return;
     };
 
-    if let Some((_, mut level, mut health, mut image)) = tile_query
+    if let Some((_, mut level, mut health)) = tile_query
         .iter_mut()
         .find(|&(pos, ..)| pos.into_grid() == selected_position)
     {
         level.up();
-        *image = assets.get(tile, level.0, Some(turn.player()));
 
         if tile.is_tile() {
             health.0 += 1;
         }
 
+        update_image.send(UpdateImageEvent);
         turn_event.send(TurnEvent);
     }
 }
@@ -324,19 +322,21 @@ pub struct GridChangedEvent;
 #[derive(Event, Debug)]
 pub struct GridUpdateEvent;
 
+#[derive(Event)]
+pub struct UpdateImageEvent;
+
 fn eat_tile(
-    assets: Res<TileAssets>,
     mut tile_query: Query<(
         &Position,
         &mut Owned,
         &mut Tile,
         &mut Level,
         &mut Health,
-        &mut Handle<Image>,
     )>,
     mut changes: EventWriter<GridChangedEvent>,
     mut events: EventReader<TileEvent>,
     mut turn_event: EventWriter<TurnEvent>,
+    mut update_image: EventWriter<UpdateImageEvent>,
     turn: Res<TurnCounter>,
     grid: ResMut<TileGrid>,
 ) {
@@ -356,7 +356,7 @@ fn eat_tile(
 
     info!("Attacking tile at {:?} from {:?}", target, origin);
 
-    if let Some((_, owner, tile, level, mut health, image)) = tile_query
+    if let Some((_, owner, tile, level, mut health)) = tile_query
         .iter_mut()
         .find(|(pos, ..)| pos.into_grid() == target)
     {
@@ -378,37 +378,35 @@ fn eat_tile(
             tile,
             owner,
             health,
-            image,
             grid,
             turn_event,
             target,
-            assets,
             PlayerTile::Tile,
             turn,
         );
 
+        update_image.send(UpdateImageEvent);
         changes.send(GridChangedEvent);
     }
 }
 
 fn delete_if_disconnected(
-    assets: Res<TileAssets>,
     mut tile_query: Query<(
         &Position,
         &mut Owned,
         &mut Tile,
         &mut Level,
-        &mut Handle<Image>,
     )>,
     grid: Res<TileGrid>,
     mut update_grid: EventWriter<GridUpdateEvent>,
+    mut update_image: EventWriter<UpdateImageEvent>,
     mut changes: EventReader<GridChangedEvent>,
 ) {
     if changes.read().count() == 0 {
         return;
     }
 
-    for (pos, mut owned, mut tile, mut level, mut image) in tile_query.iter_mut() {
+    for (pos, mut owned, mut tile, mut level) in tile_query.iter_mut() {
         if owned.0.is_none() {
             continue;
         }
@@ -419,8 +417,8 @@ fn delete_if_disconnected(
             tile.0.empty();
             level.0 = 0;
             owned.0 = None;
-            *image = assets.get(tile.0, level.0, owned.0);
 
+            update_image.send(UpdateImageEvent);
             update_grid.send(GridUpdateEvent);
         }
     }
@@ -439,5 +437,19 @@ fn update_grid(
 
     for (pos, owned) in tile_query.iter_mut() {
         grid.set_owner(pos.clone().into_grid(), owned.0);
+    }
+}
+
+fn update_image(
+    mut tile_query: Query<(&mut Handle<Image>, &Tile, &Level, &Owned)>,
+    mut update_image: EventReader<UpdateImageEvent>,
+    assets: Res<TileAssets>,
+) {
+    if update_image.read().count() == 0 {
+        return;
+    }
+
+    for (mut image, tile, level, owner) in tile_query.iter_mut() {
+        *image = assets.get(tile.0, level.0, owner.0);
     }
 }
