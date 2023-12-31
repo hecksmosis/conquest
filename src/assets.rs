@@ -15,6 +15,7 @@ const TILE_EMPTY: TextureID = (TileType::Empty(Terrain::None), 0, None);
 #[derive(Resource, Default)]
 pub struct TileAssets {
     textures: HashMap<TextureID, Handle<Image>>,
+    pub selector_texture: Handle<Image>,
 }
 
 impl TileAssets {
@@ -80,6 +81,8 @@ fn load_textures(asset_server: Res<AssetServer>, mut assets: ResMut<TileAssets>)
             );
         }
     }
+
+    assets.selector_texture = asset_server.load("selector.png");
 
     assets.textures = m;
 }

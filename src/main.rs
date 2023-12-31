@@ -98,6 +98,7 @@ fn main() {
         .add_event::<GridChangedEvent>()
         .add_event::<GridUpdateEvent>()
         .add_event::<TileEvent>()
+        .add_event::<UpdateImageEvent>()
         .insert_resource(TileGrid {
             grid: [(None, false); GRID_SIZE],
         })
@@ -113,6 +114,7 @@ fn main() {
                     upgrade,
                     register_event,
                     update_image,
+                    update_selection,
                     (delete_if_disconnected, update_grid).chain(),
                 )
                     .run_if(in_state(GameState::Game)),
@@ -130,6 +132,20 @@ fn setup(mut commands: Commands, mut grid: ResMut<TileGrid>, assets: Res<TileAss
 
         _ = commands.spawn(TileBundle::blank(get_vec_from_index(index), &assets))
     });
+
+    // Spawn selector
+    commands.spawn((
+        Selector,
+        SpriteBundle {
+            sprite: Sprite {
+                custom_size: Some(Vec2::splat(TILE_SIZE)),
+                ..default()
+            },
+            texture: assets.selector_texture.clone(),
+            visibility: Visibility::Hidden,
+            ..default()
+        },
+    ));
 
     Player::iter().for_each(|p| {
         commands.spawn(TileBundle::base(p, &assets));
@@ -201,7 +217,6 @@ fn select_tile(
     mut attack_controller: ResMut<AttackController>,
     mut events: EventWriter<TileEvent>,
     mut tile_query: Query<(&Position, &Owned, &Tile, &Level)>,
-    mut update_image: EventWriter<UpdateImageEvent>,
     turn: Res<TurnCounter>,
 ) {
     if !keys.just_pressed(KeyCode::Space) {
@@ -220,18 +235,11 @@ fn select_tile(
 
     attack_controller.select(mouse_position, level);
 
-    update_image.send(UpdateImageEvent);
     events.send(TileEvent::SelectEvent(mouse_position));
 }
 
 fn create(
-    mut tile_query: Query<(
-        &Position,
-        &mut Owned,
-        &mut Tile,
-        &mut Level,
-        &mut Health,
-    )>,
+    mut tile_query: Query<(&Position, &mut Owned, &mut Tile, &mut Level, &mut Health)>,
     turn: Res<TurnCounter>,
     grid: ResMut<TileGrid>,
     mut events: EventReader<TileEvent>,
@@ -326,13 +334,7 @@ pub struct GridUpdateEvent;
 pub struct UpdateImageEvent;
 
 fn eat_tile(
-    mut tile_query: Query<(
-        &Position,
-        &mut Owned,
-        &mut Tile,
-        &mut Level,
-        &mut Health,
-    )>,
+    mut tile_query: Query<(&Position, &mut Owned, &mut Tile, &mut Level, &mut Health)>,
     mut changes: EventWriter<GridChangedEvent>,
     mut events: EventReader<TileEvent>,
     mut turn_event: EventWriter<TurnEvent>,
@@ -391,12 +393,7 @@ fn eat_tile(
 }
 
 fn delete_if_disconnected(
-    mut tile_query: Query<(
-        &Position,
-        &mut Owned,
-        &mut Tile,
-        &mut Level,
-    )>,
+    mut tile_query: Query<(&Position, &mut Owned, &mut Tile, &mut Level)>,
     grid: Res<TileGrid>,
     mut update_grid: EventWriter<GridUpdateEvent>,
     mut update_image: EventWriter<UpdateImageEvent>,
@@ -451,5 +448,28 @@ fn update_image(
 
     for (mut image, tile, level, owner) in tile_query.iter_mut() {
         *image = assets.get(tile.0, level.0, owner.0);
+    }
+}
+
+#[derive(Component, Clone, Debug, PartialEq, Default)]
+pub struct Selector;
+
+fn update_selection(
+    attack_controller: Res<AttackController>,
+    mut selector_query: Query<(&mut Transform, &mut Visibility), With<Selector>>,
+) {
+    if attack_controller.selected.is_none() {
+        for (_, mut visibility) in selector_query.iter_mut() {
+            *visibility = Visibility::Hidden;
+        }
+        return;
+    }
+
+    let selected_position = attack_controller.selected.unwrap();
+
+    for (mut transform, mut visibility) in selector_query.iter_mut() {
+        *visibility = Visibility::Visible;
+        transform.translation =
+            (selected_position * TILE_SIZE + Vec2::splat(TILE_SIZE / 2.0)).extend(0.0);
     }
 }
