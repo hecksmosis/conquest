@@ -6,6 +6,9 @@ pub use tile_grid::*;
 pub mod tile_bundle;
 pub mod tile_grid;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Component, Clone, Debug, Default)]
 pub struct Tile(pub TileType);
 

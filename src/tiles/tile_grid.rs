@@ -10,11 +10,11 @@ pub struct TileGrid {
 }
 
 impl TileGrid {
-    fn in_bounds(x: f32, y: f32) -> bool {
+    pub fn in_bounds(x: f32, y: f32) -> bool {
         x >= -MAP_WIDTH && y >= -MAP_HEIGHT && x < MAP_WIDTH && y < MAP_HEIGHT
     }
 
-    fn get_index(Vec2 { x, y }: Vec2) -> usize {
+    pub fn get_index(Vec2 { x, y }: Vec2) -> usize {
         if !Self::in_bounds(x, y) {
             return GRID_SIZE - 1;
         }
@@ -62,7 +62,7 @@ impl TileGrid {
         tiles
     }
 
-    pub fn any_adyacent_tiles(&self, position: Vec2, player: Player) -> bool {
+    pub fn any_adjacent_tiles(&self, position: Vec2, player: Player) -> bool {
         if !Self::in_bounds(position.x, position.y) {
             return false;
         }

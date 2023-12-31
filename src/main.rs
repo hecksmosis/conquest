@@ -240,7 +240,7 @@ fn create(
         return;
     };
 
-    if !grid.any_adyacent_tiles(selected_position, turn.player()) {
+    if !grid.any_adjacent_tiles(selected_position, turn.player()) {
         return;
     }
 
@@ -350,7 +350,7 @@ fn eat_tile(
     };
 
     let me = turn.player();
-    if !grid.any_adyacent_tiles(target, me) {
+    if !grid.any_adjacent_tiles(target, me) {
         return;
     }
 
