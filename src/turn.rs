@@ -4,9 +4,9 @@ pub struct TurnPlugin;
 
 impl Plugin for TurnPlugin {
     fn build(&self, app: &mut App) {
-        app
-        .add_event::<TurnEvent>()
-        .insert_resource(TurnCounter::new()).add_systems(Update, switch_turn);
+        app.add_event::<TurnEvent>()
+            .insert_resource(TurnCounter::new())
+            .add_systems(Update, switch_turn);
     }
 }
 
@@ -25,15 +25,21 @@ impl TurnCounter {
     }
 
     pub fn player(&self) -> Player {
-        self.turn.clone()
+        self.turn
     }
 }
 
-fn switch_turn(mut turn_events: EventReader<TurnEvent>, mut turn: ResMut<TurnCounter>, mut attack_controller: ResMut<AttackController>) {
+fn switch_turn(
+    mut turn_events: EventReader<TurnEvent>,
+    mut turn: ResMut<TurnCounter>,
+    mut attack_controller: ResMut<AttackController>,
+    mut tile_events: EventWriter<TileEvent>,
+) {
     if turn_events.read().count() == 0 {
         return;
     }
 
     attack_controller.deselect();
+    tile_events.send(TileEvent::DeselectEvent);
     turn.next();
 }

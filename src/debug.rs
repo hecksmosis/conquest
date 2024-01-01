@@ -4,7 +4,15 @@ pub struct DebugPlugin;
 
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (debug_tile_adyacents, debug_base, list_entities, debug_connected_to_base));
+        app.add_systems(
+            Update,
+            (
+                debug_tile_adyacents,
+                debug_base,
+                list_entities,
+                debug_connected_to_base,
+            ),
+        );
     }
 }
 
@@ -19,9 +27,8 @@ fn debug_base(
 
     info!("Debugging base");
 
-    for (pos, tile, level, owned, health) in tile_query
-        .iter()
-        .filter(|(_, tile, ..)| tile.0.is_base())
+    for (pos, tile, level, owned, health) in
+        tile_query.iter().filter(|(_, tile, ..)| tile.0.is_base())
     {
         println!(
             "Position: {:?}, Tile: {:?}, Level: {}, Owned: {:?}, Health: {}, Grid tile: {:?}",
@@ -30,14 +37,23 @@ fn debug_base(
             level.0,
             owned,
             health.0,
-            grid.get_tile(pos.clone().into_grid())
+            grid.get_tile(pos.clone().as_grid_index())
         );
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn list_entities(
     keys: Res<Input<KeyCode>>,
-    query: Query<(Entity, &Transform, Option<&Tile>, Option<&Level>, Option<&Owned>, Option<&Health>, Option<&Text>)>,
+    query: Query<(
+        Entity,
+        &Transform,
+        Option<&Tile>,
+        Option<&Level>,
+        Option<&Owned>,
+        Option<&Health>,
+        Option<&Text>,
+    )>,
 ) {
     if !keys.just_pressed(KeyCode::L) {
         return;
@@ -77,8 +93,8 @@ fn debug_tile_adyacents(
             level.0,
             owned,
             health.0,
-            grid.get_tile(pos.clone().into_grid()),
-            grid.get_connected_tiles(pos.clone().into_grid(), turn.player())
+            grid.get_tile(pos.clone().as_grid_index()),
+            grid.get_connected_tiles(pos.clone().as_grid_index(), turn.player())
         );
     }
 }
@@ -107,8 +123,8 @@ fn debug_connected_to_base(
             level.0,
             owned,
             health.0,
-            grid.get_tile(pos.clone().into_grid()),
-            grid.is_connected_to_base(pos.clone().into_grid(), turn.player())
+            grid.get_tile(pos.clone().as_grid_index()),
+            grid.is_connected_to_base(pos.clone().as_grid_index(), turn.player())
         );
     }
 }

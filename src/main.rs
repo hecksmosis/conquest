@@ -11,7 +11,7 @@ use consts::*;
 use debug::DebugPlugin;
 use grid_mouse::*;
 use hud::HUDPlugin;
-use menu::MenuPlugin;
+// use menu::MenuPlugin;
 use player::*;
 use strum::IntoEnumIterator;
 use terrain::TerrainPlugin;
@@ -36,30 +36,21 @@ mod utils;
 struct Position(pub(crate) Vec2);
 
 impl Position {
-    pub fn into_grid(&self) -> Vec2 {
+    pub fn as_grid_index(&self) -> Vec2 {
         (self.0 - TILE_SIZE / 2.0) / TILE_SIZE
     }
 }
 
-impl Into<Transform> for Position {
-    fn into(self) -> Transform {
-        Transform::from_translation(self.0.extend(0.0))
+impl From<Position> for Transform {
+    fn from(pos: Position) -> Self {
+        Transform::from_translation(pos.0.extend(0.0))
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct AttackController {
     pub selected: Option<Vec2>,
     pub selected_level: Option<usize>,
-}
-
-impl Default for AttackController {
-    fn default() -> Self {
-        Self {
-            selected: None,
-            selected_level: None,
-        }
-    }
 }
 
 impl AttackController {
@@ -91,7 +82,7 @@ fn main() {
             TurnPlugin,
             HUDPlugin,
             DebugPlugin,
-            MenuPlugin,
+            // MenuPlugin,
             AssetsPlugin,
             TerrainPlugin,
         ))
@@ -180,6 +171,7 @@ pub struct UpdateImageEvent;
 pub enum TileEvent {
     UpgradeEvent(Vec2, TileType),
     SelectEvent(Vec2),
+    DeselectEvent,
     AttackEvent {
         origin: Option<Vec2>,
         target: Vec2,
@@ -200,10 +192,10 @@ fn register_event(
         return;
     }
 
-    let button = buttons.get_just_pressed().nth(0).unwrap();
+    let button = buttons.get_just_pressed().next().unwrap();
     let Some((_, owner, tile, ..)) = tile_query
         .iter_mut()
-        .find(|(pos, ..)| pos.into_grid() == mouse.grid_position())
+        .find(|(pos, ..)| pos.as_grid_index() == mouse.grid_position())
     else {
         return;
     };
@@ -247,7 +239,7 @@ fn select_tile(
 
     let Some((_, _, Tile(TileType::Occupied(PlayerTile::Tile, _)), &Level(level), ..)) =
         tile_query.iter_mut().find(|(pos, owner, ..)| {
-            pos.into_grid() == mouse_position && owner.0 == Some(turn.player())
+            pos.as_grid_index() == mouse_position && owner.0 == Some(turn.player())
         })
     else {
         return;
@@ -270,7 +262,7 @@ fn upgrade(
 
     if let Some((_, mut level, mut health)) = tile_query
         .iter_mut()
-        .find(|&(pos, ..)| pos.into_grid() == selected_position)
+        .find(|&(pos, ..)| pos.as_grid_index() == selected_position)
     {
         level.up();
 
@@ -314,7 +306,7 @@ fn tile_attack(
     );
     let targets = get_attack_targets(origin, target, attacker_level);
 
-    if targets.len() == 0 {
+    if targets.is_empty() {
         return;
     }
 
@@ -322,7 +314,7 @@ fn tile_attack(
 
     for (pos, mut owner, mut tile, mut level, mut health) in tile_query
         .iter_mut()
-        .filter(|(pos, ..)| targets.contains(&pos.into_grid()))
+        .filter(|(pos, ..)| targets.contains(&pos.as_grid_index()))
     {
         health.damage();
         if health.0 > 0 {
@@ -337,7 +329,7 @@ fn tile_attack(
             _ => 0,
         };
         owner.0 = Some(turn.player());
-        grid.set_owner(pos.into_grid(), Some(turn.player()));
+        grid.set_owner(pos.as_grid_index(), Some(turn.player()));
     }
 
     turn_event.send(TurnEvent);
@@ -361,7 +353,7 @@ fn delete_if_disconnected(
             continue;
         }
 
-        if grid.is_connected_to_base(pos.clone().into_grid(), owned.0.unwrap()) {
+        if grid.is_connected_to_base(pos.clone().as_grid_index(), owned.0.unwrap()) {
             continue;
         } else {
             tile.0.empty();
@@ -376,7 +368,7 @@ fn delete_if_disconnected(
 
 fn update_grid(mut tile_query: Query<(&Position, &Owned)>, mut grid: ResMut<TileGrid>) {
     for (pos, owned) in tile_query.iter_mut() {
-        grid.set_owner(pos.clone().into_grid(), owned.0);
+        grid.set_owner(pos.clone().as_grid_index(), owned.0);
     }
 }
 

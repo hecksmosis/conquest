@@ -1,4 +1,4 @@
-use strum::{Display, EnumString, EnumIter};
+use strum::{Display, EnumIter, EnumString};
 
 #[derive(Copy, Clone, PartialEq, Debug, Eq, Hash, EnumString, Display, EnumIter)]
 pub enum Player {

@@ -106,7 +106,7 @@ fn make_terrain(
         return;
     }
 
-    let button = buttons.get_just_pressed().nth(0).unwrap();
+    let button = buttons.get_just_pressed().next().unwrap();
     if let Some((_, mut tile, Owned(None), mut health, mut image)) =
         tile_query.iter_mut().find(|(pos, tile, ..)| {
             pos == &&mouse.as_position()

@@ -52,31 +52,19 @@ impl TileType {
     pub const WATER: TileType = TileType::Empty(Terrain::Water);
 
     pub fn is_farm(&self) -> bool {
-        match self {
-            TileType::Occupied(PlayerTile::Farm, _) => true,
-            _ => false,
-        }
+        matches!(self, TileType::Occupied(PlayerTile::Farm, _))
     }
 
     pub fn is_base(&self) -> bool {
-        match self {
-            TileType::Occupied(PlayerTile::Base, _) => true,
-            _ => false,
-        }
+        matches!(self, TileType::Occupied(PlayerTile::Base, _))
     }
 
     pub fn is_tile(&self) -> bool {
-        match self {
-            TileType::Occupied(PlayerTile::Tile, _) => true,
-            _ => false,
-        }
+        matches!(self, TileType::Occupied(PlayerTile::Tile, _))
     }
 
     pub fn is_empty(&self) -> bool {
-        match self {
-            TileType::Empty(Terrain::None) => true,
-            _ => false,
-        }
+        matches!(self, TileType::Empty(Terrain::None))
     }
 
     pub fn terrain(&self) -> Terrain {
@@ -87,10 +75,7 @@ impl TileType {
     }
 
     pub fn is_occupied(&self) -> bool {
-        match self {
-            TileType::Occupied(_, _) => true,
-            _ => false,
-        }
+        matches!(self, TileType::Occupied(_, _))
     }
 
     pub fn player_tile(&self) -> Option<PlayerTile> {
@@ -108,9 +93,8 @@ impl TileType {
     }
 
     pub fn empty(&mut self) {
-        match self {
-            TileType::Occupied(_, terrain) => *self = TileType::Empty(*terrain),
-            _ => {}
+        if let TileType::Occupied(_, terrain) = self {
+            *self = TileType::Empty(*terrain);
         }
     }
 }
@@ -120,7 +104,7 @@ pub enum Terrain {
     #[default]
     None,
     Water,
-    Mountain
+    Mountain,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Eq, Hash)]

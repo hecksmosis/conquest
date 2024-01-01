@@ -120,12 +120,10 @@ fn count_farms(farms: Query<(&Tile, &Owned, &Level)>, mut query: Query<(&mut Tex
                     return total;
                 };
 
-                if player == &Player::Red && i == 0 {
-                    return total + level;
-                } else if player == &Player::Blue && i == 1 {
-                    return total + level;
+                if (player == &Player::Red && i == 0) || (player == &Player::Blue && i == 1) {
+                    total + level
                 } else {
-                    return total;
+                    total
                 }
             })
             + 1; // Add one for the base

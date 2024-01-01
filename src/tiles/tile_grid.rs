@@ -67,7 +67,7 @@ impl TileGrid {
             return false;
         }
 
-        self.get_connected_tiles(position, player).len() != 0
+        !self.get_connected_tiles(position, player).is_empty()
     }
 
     pub fn is_connected_to_base(&self, start: Vec2, check_player: Player) -> bool {

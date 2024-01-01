@@ -2,11 +2,11 @@ use super::*;
 
 #[test]
 fn test_in_bounds() {
-    assert_eq!(TileGrid::in_bounds(0.0, 0.0), true);
-    assert_eq!(TileGrid::in_bounds(-MAP_WIDTH - 1.0, 0.0), false);
-    assert_eq!(TileGrid::in_bounds(0.0, -MAP_HEIGHT - 1.0), false);
-    assert_eq!(TileGrid::in_bounds(MAP_WIDTH, 0.0), false);
-    assert_eq!(TileGrid::in_bounds(0.0, MAP_HEIGHT), false);
+    assert!(TileGrid::in_bounds(0.0, 0.0));
+    assert!(!TileGrid::in_bounds(-MAP_WIDTH - 1.0, 0.0));
+    assert!(!TileGrid::in_bounds(0.0, -MAP_HEIGHT - 1.0));
+    assert!(!TileGrid::in_bounds(MAP_WIDTH, 0.0));
+    assert!(!TileGrid::in_bounds(0.0, MAP_HEIGHT));
 }
 
 #[test]
@@ -75,14 +75,8 @@ fn test_any_adjacent_tiles() {
     };
     grid.set_owner(Vec2 { x: 0.0, y: 0.0 }, Some(Player::Red));
     grid.set_owner(Vec2 { x: 1.0, y: 0.0 }, Some(Player::Red));
-    assert_eq!(
-        grid.any_adjacent_tiles(Vec2 { x: 0.0, y: 0.0 }, Player::Red),
-        true
-    );
-    assert_eq!(
-        grid.any_adjacent_tiles(Vec2 { x: 0.0, y: 0.0 }, Player::Blue),
-        false
-    );
+    assert!(grid.any_adjacent_tiles(Vec2 { x: 0.0, y: 0.0 }, Player::Red));
+    assert!(!grid.any_adjacent_tiles(Vec2 { x: 0.0, y: 0.0 }, Player::Blue));
 }
 
 #[test]
@@ -112,36 +106,25 @@ fn test_is_connected_to_base() {
         Some(Player::Red),
     );
     grid.make_base(Player::Red);
-    assert_eq!(
-        grid.is_connected_to_base(
-            Vec2 {
-                x: -MAP_WIDTH + 2.0,
-                y: -MAP_HEIGHT
-            },
-            Player::Red
-        ),
-        true
-    );
-    assert_eq!(
-        grid.is_connected_to_base(
-            Vec2 {
-                x: -MAP_WIDTH + 1.0,
-                y: -MAP_HEIGHT + 1.0
-            },
-            Player::Red
-        ),
-        true
-    );
-    assert_eq!(
-        grid.is_connected_to_base(
-            Vec2 {
-                x: -MAP_WIDTH + 2.0,
-                y: -MAP_HEIGHT
-            },
-            Player::Blue
-        ),
-        false
-    );
+    assert!(grid.is_connected_to_base(
+        Vec2 {
+            x: -MAP_WIDTH + 2.0,
+            y: -MAP_HEIGHT
+        },
+        Player::Red
+    ));
+    assert!(grid.is_connected_to_base(
+        Vec2 {
+            x: -MAP_WIDTH + 1.0,
+            y: -MAP_HEIGHT + 1.0
+        },
+        Player::Red
+    ));
+    assert!(!grid.is_connected_to_base(
+        Vec2 {
+            x: -MAP_WIDTH + 2.0,
+            y: -MAP_HEIGHT
+        },
+        Player::Blue
+    ));
 }
-
-
