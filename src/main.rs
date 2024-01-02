@@ -20,6 +20,8 @@ use tiles::*;
 use turn::*;
 use utils::{get_attack_targets, get_rectified_mouse_position, get_vec_from_index};
 
+use crate::utils::get_selected_grid_position;
+
 mod assets;
 mod camera;
 mod consts;
@@ -168,59 +170,57 @@ pub struct UpdateImageEvent;
 
 #[derive(Event, Debug)]
 pub enum TileEvent {
-    UpgradeEvent(Vec2, TileType),
-    SelectEvent(Vec2),
-    DeselectEvent,
+    UpgradeEvent {
+        target: Vec2,
+        hp: usize,
+    },
     AttackEvent {
-        origin: Option<Vec2>,
         targets: Vec<Vec2>,
         player_tile: PlayerTile,
     },
+    SelectEvent(Vec2),
+    DeselectEvent,
 }
 
 fn register_event(
-    mouse: Res<GridMouse>,
-    mut buttons: ResMut<Input<MouseButton>>,
+    (mouse, mut buttons): (Res<GridMouse>, ResMut<Input<MouseButton>>),
     mut event: EventWriter<TileEvent>,
     mut tile_query: Query<(&Position, &mut Owned, &mut Tile)>,
     attack_controller: Res<AttackController>,
     turn: Res<TurnCounter>,
     farms: Res<FarmCounter>,
+    grid: Res<TileGrid>,
 ) {
-    if !buttons.any_just_pressed([MouseButton::Left, MouseButton::Right]) {
-        return;
-    }
-
-    let button = buttons.get_just_pressed().next().unwrap();
-    let Some((_, owner, tile, ..)) = tile_query
-        .iter_mut()
-        .find(|(pos, ..)| pos.as_grid_index() == mouse.grid_position())
+    const BUTTONS: [MouseButton; 2] = [MouseButton::Left, MouseButton::Right];
+    let Some((button, owner, tile)) = buttons
+        .get_just_pressed()
+        .find(|x| BUTTONS.contains(x))
+        .and_then(|button| {
+            tile_query
+                .iter_mut()
+                .find(|(pos, ..)| pos.as_grid_index() == mouse.grid_position())
+                .map(|tile| (button, tile.1, tile.2))
+        })
     else {
         return;
     };
 
     let farms_available = farms.available_farms(turn.player());
-    let attacker_level = attack_controller.selected_level.unwrap_or(1);
     let targets = get_attack_targets(
-        attack_controller.selected.unwrap_or(Vec2::MAX),
+        get_selected_grid_position(&attack_controller, &grid, &mouse, turn.player()),
         mouse.grid_position(),
-        attacker_level,
+        attack_controller.selected_level.unwrap_or(1),
     );
     match (tile.0.player_tile(), owner.0, button, farms_available) {
         (Some(PlayerTile::Tile), Some(p), MouseButton::Right, _) if p == turn.player() => event
             .send(TileEvent::AttackEvent {
-                origin: None,
-                targets: vec![mouse.grid_position()],
+                targets,
                 player_tile: PlayerTile::Farm,
             }),
         (Some(PlayerTile::Tile), Some(p), MouseButton::Left, 1..)
         | (Some(PlayerTile::Farm), Some(p), MouseButton::Left, _) // Farm upgrades are free (balancing TODO)
-            if p == turn.player() =>
-        {
-            event.send(TileEvent::UpgradeEvent(mouse.grid_position(), tile.0))
-        }
-        (.., MouseButton::Left, available @ 1..) if available >= targets.len() => event.send(TileEvent::AttackEvent {
-            origin: attack_controller.selected,
+            if p == turn.player() => event.send(TileEvent::UpgradeEvent { target: mouse.grid_position(), hp: tile.0.is_tile() as usize} ),
+        (.., MouseButton::Left, available @ 1..) if available >= targets.len() && !targets.is_empty() => event.send(TileEvent::AttackEvent {
             targets,
             player_tile: PlayerTile::Tile,
         }),
@@ -267,19 +267,16 @@ fn upgrade(
     mut turn_event: EventWriter<TurnEvent>,
     mut update_image: EventWriter<UpdateImageEvent>,
 ) {
-    let Some(&TileEvent::UpgradeEvent(selected_position, tile)) = events.read().next() else {
+    let Some(&TileEvent::UpgradeEvent { target, hp }) = events.read().next() else {
         return;
     };
 
     if let Some((_, mut level, mut health)) = tile_query
         .iter_mut()
-        .find(|&(pos, ..)| pos.as_grid_index() == selected_position)
+        .find(|&(pos, ..)| pos.as_grid_index() == target)
     {
         level.up();
-
-        if tile.is_tile() {
-            health.0 += 1;
-        }
+        health.0 += hp;
 
         update_image.send(UpdateImageEvent);
         turn_event.send(TurnEvent);
@@ -296,7 +293,6 @@ fn tile_attack(
     turn: Res<TurnCounter>,
 ) {
     let Some(&TileEvent::AttackEvent {
-        origin,
         ref targets,
         player_tile,
     }) = events.read().next()
@@ -304,18 +300,6 @@ fn tile_attack(
         return;
     };
 
-    if origin.is_none() && !grid.any_adjacent_tiles(targets[0], turn.player()) {
-        return;
-    }
-
-    let origin = origin.unwrap_or(
-        grid.get_connected_tiles(targets[0], turn.player())
-            .first()
-            .map(|a| a.1)
-            .unwrap_or(Vec2::MAX), // Will never be reached
-    );
-
-    info!("Target: {:?}, origin: {:?}", targets, origin);
     for (pos, mut owner, mut tile, mut level, mut health) in tile_query
         .iter_mut()
         .filter(|(pos, ..)| targets.contains(&pos.as_grid_index()))

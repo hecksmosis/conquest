@@ -50,29 +50,23 @@ fn attack_is_valid(origin: Vec2, target: Vec2, level: usize) -> bool {
     }
 }
 
-pub fn get_attack_targets(origin: Vec2, target: Vec2, level: usize) -> Vec<Vec2> {
+pub fn get_attack_targets(origin: Option<Vec2>, target: Vec2, level: usize) -> Vec<Vec2> {
+    let Some(origin) = origin else {
+        return vec![];
+    };
     if !attack_is_valid(origin, target, level) {
         return vec![];
     }
 
+    let diff = target - origin;
+    let direction = diff / diff.length();
     match level {
-        2 => {
-            let diff = target - origin;
-            let direction = diff / diff.length();
-
-            vec![origin + direction, origin + direction * 2.0]
-        }
-
-        3 => {
-            let diff = target - origin;
-            let direction = diff / diff.length();
-
-            vec![
-                origin + direction,
-                origin + direction + Vec2::new(direction.y, -direction.x),
-                origin + direction + Vec2::new(-direction.y, direction.x),
-            ]
-        }
+        2 => vec![origin + direction, origin + direction * 2.0],
+        3 => vec![
+            origin + direction,
+            origin + direction + Vec2::new(direction.y, -direction.x),
+            origin + direction + Vec2::new(-direction.y, direction.x),
+        ],
         _ => vec![target],
     }
 }
@@ -89,4 +83,15 @@ pub fn count_farms(farms: &Query<(&Tile, &Owned, &Level)>) -> [usize; 2] {
             total[*player as usize] += level;
             total
         })
+}
+
+pub fn get_selected_grid_position(
+    attack_controller: &Res<AttackController>,
+    grid: &Res<TileGrid>,
+    mouse: &Res<GridMouse>,
+    player: Player,
+) -> Option<Vec2> {
+    attack_controller
+        .selected
+        .or_else(|| grid.any_connected(mouse.grid_position(), player).then(|| mouse.grid_position()))
 }

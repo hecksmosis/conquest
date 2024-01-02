@@ -77,12 +77,10 @@ fn finish_placement(
     mut state: ResMut<NextState<GameState>>,
     mut terrain_counter: ResMut<TerrainCounter>,
     mut turn_event: EventWriter<TurnEvent>,
-    grid: Res<TileGrid>,
 ) {
     if keys.just_pressed(KeyCode::Return) {
         if turn.player() == Player::Blue {
             state.set(GameState::Game);
-            dbg!(grid);
         }
         terrain_counter.placement_mode = Terrain::Mountain;
         turn_event.send(TurnEvent);

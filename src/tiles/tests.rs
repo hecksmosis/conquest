@@ -62,21 +62,7 @@ fn test_get_connected_tiles() {
     grid.set_owner(Vec2 { x: 1.0, y: 0.0 }, Some(Player::Red));
     let connected_tiles = grid.get_connected_tiles(Vec2 { x: 0.0, y: 0.0 }, Player::Red);
     assert_eq!(connected_tiles.len(), 1);
-    assert_eq!(
-        connected_tiles[0],
-        (Player::Red, Vec2 { x: 1.0, y: 0.0 }, false)
-    );
-}
-
-#[test]
-fn test_any_adjacent_tiles() {
-    let mut grid = TileGrid {
-        grid: [(None, false); (MAP_WIDTH * MAP_HEIGHT * 4.0 + 1.0) as usize],
-    };
-    grid.set_owner(Vec2 { x: 0.0, y: 0.0 }, Some(Player::Red));
-    grid.set_owner(Vec2 { x: 1.0, y: 0.0 }, Some(Player::Red));
-    assert!(grid.any_adjacent_tiles(Vec2 { x: 0.0, y: 0.0 }, Player::Red));
-    assert!(!grid.any_adjacent_tiles(Vec2 { x: 0.0, y: 0.0 }, Player::Blue));
+    assert_eq!(connected_tiles[0], Vec2 { x: 1.0, y: 0.0 });
 }
 
 #[test]

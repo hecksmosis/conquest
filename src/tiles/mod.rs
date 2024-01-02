@@ -74,10 +74,6 @@ impl TileType {
         }
     }
 
-    pub fn is_occupied(&self) -> bool {
-        matches!(self, TileType::Occupied(_, _))
-    }
-
     pub fn player_tile(&self) -> Option<PlayerTile> {
         match self {
             TileType::Occupied(player_tile, _) => Some(*player_tile),

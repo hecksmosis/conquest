@@ -4,6 +4,8 @@ use bevy::utils::HashSet;
 
 use crate::*;
 
+pub const ADYACENCIES: [(f32, f32); 4] = [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)];
+
 #[derive(Resource, Debug)]
 pub struct TileGrid {
     pub grid: [(Option<Player>, bool); (MAP_WIDTH * MAP_HEIGHT * 4.0 + 1.0) as usize],
@@ -39,35 +41,24 @@ impl TileGrid {
         })] = (Some(owner), true)
     }
 
-    pub fn get_connected_tiles(
-        &self,
-        Vec2 { x, y }: Vec2,
-        owner: Player,
-    ) -> Vec<(Player, Vec2, bool)> {
-        let mut tiles = Vec::new();
-
-        for vec in &[
-            Vec2 { x: x + 1.0, y },
-            Vec2 { x: x - 1.0, y },
-            Vec2 { x, y: y + 1.0 },
-            Vec2 { x, y: y - 1.0 },
-        ] {
-            if let (Some(p), base) = self.get_tile(*vec) {
-                if p == owner {
-                    tiles.push((p, *vec, base));
-                }
-            }
-        }
-
-        tiles
+    pub fn get_connected_tiles(&self, pos: Vec2, owner: Player) -> Vec<Vec2> {
+        ADYACENCIES
+            .iter()
+            .filter_map(|&(dx, dy)| {
+                let next_pos = pos + Vec2::new(dx, dy);
+                self.get_tile(next_pos)
+                    .0
+                    .filter(|&p| p == owner)
+                    .map(|_| next_pos)
+            })
+            .collect()
     }
 
-    pub fn any_adjacent_tiles(&self, position: Vec2, player: Player) -> bool {
-        if !Self::in_bounds(position.x, position.y) {
-            return false;
-        }
-
-        !self.get_connected_tiles(position, player).is_empty()
+    pub fn any_connected(&self, pos: Vec2, owner: Player) -> bool {
+        ADYACENCIES.iter().any(|&(dx, dy)| {
+            let next_pos = pos + Vec2::new(dx, dy);
+            self.get_tile(next_pos).0 == Some(owner)
+        })
     }
 
     pub fn is_connected_to_base(&self, start: Vec2, check_player: Player) -> bool {
