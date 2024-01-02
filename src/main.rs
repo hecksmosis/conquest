@@ -9,6 +9,7 @@ use bevy::{
 use camera::CameraPlugin;
 use consts::*;
 use debug::DebugPlugin;
+use farms::{FarmCounter, FarmPlugin};
 use grid_mouse::*;
 use hud::HUDPlugin;
 // use menu::MenuPlugin;
@@ -23,6 +24,7 @@ mod assets;
 mod camera;
 mod consts;
 mod debug;
+mod farms;
 mod grid_mouse;
 mod hud;
 mod menu;
@@ -85,6 +87,7 @@ fn main() {
             // MenuPlugin,
             AssetsPlugin,
             TerrainPlugin,
+            FarmPlugin,
         ))
         .add_event::<GridChangedEvent>()
         .add_event::<GridUpdateEvent>()
@@ -93,7 +96,7 @@ fn main() {
         .insert_resource(TileGrid {
             grid: [(None, false); GRID_SIZE],
         })
-        .insert_resource(AttackController::default())
+        .init_resource::<AttackController>()
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -119,11 +122,7 @@ fn main() {
 }
 
 fn setup(mut commands: Commands, mut grid: ResMut<TileGrid>, assets: Res<TileAssets>) {
-    (1..(MAP_HEIGHT * MAP_WIDTH * 4.0) as usize).for_each(|index| {
-        if index == GRID_SIZE - 1 {
-            return;
-        }
-
+    (1..(MAP_HEIGHT * MAP_WIDTH * 4.0 - 1.0) as usize).for_each(|index| {
         _ = commands.spawn(TileBundle::blank(get_vec_from_index(index), &assets))
     });
 
@@ -174,8 +173,7 @@ pub enum TileEvent {
     DeselectEvent,
     AttackEvent {
         origin: Option<Vec2>,
-        target: Vec2,
-        attacker_level: usize,
+        targets: Vec<Vec2>,
         player_tile: PlayerTile,
     },
 }
@@ -187,6 +185,7 @@ fn register_event(
     mut tile_query: Query<(&Position, &mut Owned, &mut Tile)>,
     attack_controller: Res<AttackController>,
     turn: Res<TurnCounter>,
+    farms: Res<FarmCounter>,
 ) {
     if !buttons.any_just_pressed([MouseButton::Left, MouseButton::Right]) {
         return;
@@ -200,22 +199,29 @@ fn register_event(
         return;
     };
 
-    match (tile.0.player_tile(), owner.0, button) {
-        (Some(PlayerTile::Tile), Some(p), MouseButton::Right) if p == turn.player() => {
-            event.send(TileEvent::AttackEvent {
-                origin: attack_controller.selected,
-                target: mouse.grid_position(),
-                attacker_level: attack_controller.selected_level.unwrap_or(1),
+    let farms_available = farms.available_farms(turn.player());
+    let attacker_level = attack_controller.selected_level.unwrap_or(1);
+    let targets = get_attack_targets(
+        attack_controller.selected.unwrap_or(Vec2::MAX),
+        mouse.grid_position(),
+        attacker_level,
+    );
+    match (tile.0.player_tile(), owner.0, button, farms_available) {
+        (Some(PlayerTile::Tile), Some(p), MouseButton::Right, _) if p == turn.player() => event
+            .send(TileEvent::AttackEvent {
+                origin: None,
+                targets: vec![mouse.grid_position()],
                 player_tile: PlayerTile::Farm,
-            })
-        }
-        (Some(_), Some(p), MouseButton::Left) if p == turn.player() => {
+            }),
+        (Some(PlayerTile::Tile), Some(p), MouseButton::Left, 1..)
+        | (Some(PlayerTile::Farm), Some(p), MouseButton::Left, _) // Farm upgrades are free (balancing TODO)
+            if p == turn.player() =>
+        {
             event.send(TileEvent::UpgradeEvent(mouse.grid_position(), tile.0))
         }
-        (.., MouseButton::Left) => event.send(TileEvent::AttackEvent {
+        (.., MouseButton::Left, available @ 1..) if available >= targets.len() => event.send(TileEvent::AttackEvent {
             origin: attack_controller.selected,
-            target: mouse.grid_position(),
-            attacker_level: attack_controller.selected_level.unwrap_or(1),
+            targets,
             player_tile: PlayerTile::Tile,
         }),
         _ => (),
@@ -235,8 +241,13 @@ fn select_tile(
         return;
     }
 
-    let mouse_position = mouse.grid_position();
+    if attack_controller.selected.is_some() {
+        attack_controller.deselect();
+        events.send(TileEvent::DeselectEvent);
+        return;
+    }
 
+    let mouse_position = mouse.grid_position();
     let Some((_, _, Tile(TileType::Occupied(PlayerTile::Tile, _)), &Level(level), ..)) =
         tile_query.iter_mut().find(|(pos, owner, ..)| {
             pos.as_grid_index() == mouse_position && owner.0 == Some(turn.player())
@@ -286,38 +297,31 @@ fn tile_attack(
 ) {
     let Some(&TileEvent::AttackEvent {
         origin,
-        target,
-        attacker_level,
+        ref targets,
         player_tile,
     }) = events.read().next()
     else {
         return;
     };
 
-    if origin.is_none() && !grid.any_adjacent_tiles(target, turn.player()) {
+    if origin.is_none() && !grid.any_adjacent_tiles(targets[0], turn.player()) {
         return;
     }
 
     let origin = origin.unwrap_or(
-        grid.get_connected_tiles(target, turn.player())
+        grid.get_connected_tiles(targets[0], turn.player())
             .first()
             .map(|a| a.1)
             .unwrap_or(Vec2::MAX), // Will never be reached
     );
-    let targets = get_attack_targets(origin, target, attacker_level);
 
-    if targets.is_empty() {
-        return;
-    }
-
-    info!("Attacking tile at {:?} from {:?}", target, origin);
-
+    info!("Target: {:?}, origin: {:?}", targets, origin);
     for (pos, mut owner, mut tile, mut level, mut health) in tile_query
         .iter_mut()
         .filter(|(pos, ..)| targets.contains(&pos.as_grid_index()))
     {
         health.damage();
-        if health.0 > 0 {
+        if health.0 > 0 && player_tile != PlayerTile::Farm {
             continue;
         }
 

@@ -110,25 +110,9 @@ fn setup_hud(mut commands: Commands) {
     ));
 }
 
-fn count_farms(farms: Query<(&Tile, &Owned, &Level)>, mut query: Query<(&mut Text, &FarmText)>) {
+fn count_farms(farms: Res<FarmCounter>, mut query: Query<(&mut Text, &FarmText)>) {
     for (i, (mut text, _)) in query.iter_mut().enumerate() {
-        let farm_count = farms
-            .iter()
-            .filter(|(Tile(tile_type), _, _)| tile_type.is_farm())
-            .fold(0, |total, (_, Owned(owner), Level(level))| {
-                let Some(player) = owner else {
-                    return total;
-                };
-
-                if (player == &Player::Red && i == 0) || (player == &Player::Blue && i == 1) {
-                    total + level
-                } else {
-                    total
-                }
-            })
-            + 1; // Add one for the base
-
-        text.sections[1].value = farm_count.to_string();
+        text.sections[1].value = farms.available_farms(i.into()).to_string();
     }
 }
 

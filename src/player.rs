@@ -16,3 +16,13 @@ impl Player {
         }
     }
 }
+
+impl From<usize> for Player {
+    fn from(i: usize) -> Self {
+        match i {
+            0 => Player::Red,
+            1 => Player::Blue,
+            _ => panic!("Invalid player index: {}", i),
+        }
+    }
+}

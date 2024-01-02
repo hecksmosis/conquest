@@ -28,7 +28,7 @@ fn attack_is_valid(origin: Vec2, target: Vec2, level: usize) -> bool {
     info!("{}, level: {}", diff, level);
 
     match level {
-        1 => [
+        1 | 3 => [
             Vec2::new(1.0, 0.0),
             Vec2::new(-1.0, 0.0),
             Vec2::new(0.0, 1.0),
@@ -56,15 +56,37 @@ pub fn get_attack_targets(origin: Vec2, target: Vec2, level: usize) -> Vec<Vec2>
     }
 
     match level {
-        1 => vec![target],
-
-        // Get attack direction and return tiles 2 and 1 away in that direction
         2 => {
             let diff = target - origin;
             let direction = diff / diff.length();
 
             vec![origin + direction, origin + direction * 2.0]
         }
-        _ => vec![],
+
+        3 => {
+            let diff = target - origin;
+            let direction = diff / diff.length();
+
+            vec![
+                origin + direction,
+                origin + direction + Vec2::new(direction.y, -direction.x),
+                origin + direction + Vec2::new(-direction.y, direction.x),
+            ]
+        }
+        _ => vec![target],
     }
+}
+
+pub fn count_farms(farms: &Query<(&Tile, &Owned, &Level)>) -> [usize; 2] {
+    farms
+        .iter()
+        .filter(|(Tile(tile_type), _, _)| tile_type.is_farm())
+        .fold([1; 2], |mut total, (_, Owned(owner), Level(level))| {
+            let Some(player) = owner else {
+                return total;
+            };
+
+            total[*player as usize] += level;
+            total
+        })
 }
