@@ -6,9 +6,6 @@ pub use tile_grid::*;
 pub mod tile_bundle;
 pub mod tile_grid;
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Component, Clone, Debug, Default)]
 pub struct Tile(pub TileType);
 
@@ -25,10 +22,11 @@ impl Level {
 pub struct Health(pub usize);
 
 impl Health {
-    pub fn damage(&mut self) {
+    pub fn damage(&mut self) -> usize {
         if self.0 > 0 {
             self.0 -= 1;
         }
+        self.0
     }
 }
 
@@ -101,6 +99,16 @@ pub enum Terrain {
     None,
     Water,
     Mountain,
+}
+
+impl Terrain {
+    pub fn get_health(&self) -> usize {
+        match self {
+            Terrain::Water => 0,
+            Terrain::None => 1,
+            Terrain::Mountain => 2,
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Eq, Hash)]

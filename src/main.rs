@@ -18,9 +18,10 @@ use strum::IntoEnumIterator;
 use terrain::TerrainPlugin;
 use tiles::*;
 use turn::*;
-use utils::{get_attack_targets, get_rectified_mouse_position, get_vec_from_index};
-
-use crate::utils::get_selected_grid_position;
+use utils::{
+    get_attack_targets, get_rectified_mouse_position, get_selected_grid_position,
+    get_vec_from_index,
+};
 
 mod assets;
 mod camera;
@@ -111,8 +112,8 @@ fn main() {
                     update_image.run_if(update_image_event),
                     update_selection,
                     (
-                        delete_if_disconnected,
                         update_grid.run_if(grid_update_event),
+                        delete_if_disconnected,
                     )
                         .chain(),
                 )
@@ -237,28 +238,22 @@ fn select_tile(
     mut tile_query: Query<(&Position, &Owned, &Tile, &Level)>,
     turn: Res<TurnCounter>,
 ) {
-    if !keys.just_pressed(KeyCode::Space) {
-        return;
+    if keys.just_pressed(KeyCode::Space) {
+        if attack_controller.selected.is_some() {
+            attack_controller.deselect();
+            events.send(TileEvent::DeselectEvent)
+        } else {
+            let mouse_position = mouse.grid_position();
+            if let Some((_, _, Tile(TileType::Occupied(PlayerTile::Tile, _)), &Level(level), ..)) =
+                tile_query.iter_mut().find(|(pos, owner, ..)| {
+                    pos.as_grid_index() == mouse_position && owner.0 == Some(turn.player())
+                })
+            {
+                attack_controller.select(mouse_position, level);
+                events.send(TileEvent::SelectEvent(mouse_position));
+            }
+        }
     }
-
-    if attack_controller.selected.is_some() {
-        attack_controller.deselect();
-        events.send(TileEvent::DeselectEvent);
-        return;
-    }
-
-    let mouse_position = mouse.grid_position();
-    let Some((_, _, Tile(TileType::Occupied(PlayerTile::Tile, _)), &Level(level), ..)) =
-        tile_query.iter_mut().find(|(pos, owner, ..)| {
-            pos.as_grid_index() == mouse_position && owner.0 == Some(turn.player())
-        })
-    else {
-        return;
-    };
-
-    attack_controller.select(mouse_position, level);
-
-    events.send(TileEvent::SelectEvent(mouse_position));
 }
 
 fn upgrade(
@@ -283,13 +278,16 @@ fn upgrade(
     }
 }
 
+fn get_start_tuple(terrain: Terrain, player: Player) -> (usize, usize, Option<Player>) {
+    (1, terrain.get_health(), Some(player))
+}
+
 fn tile_attack(
-    mut tile_query: Query<(&Position, &mut Owned, &mut Tile, &mut Level, &mut Health)>,
+    mut tile_query: Query<(&Position, &mut Health, &mut Owned, &mut Tile, &mut Level)>,
     mut events: EventReader<TileEvent>,
     mut changes: EventWriter<GridChangedEvent>,
     mut turn_event: EventWriter<TurnEvent>,
     mut update_image: EventWriter<UpdateImageEvent>,
-    mut grid: ResMut<TileGrid>,
     turn: Res<TurnCounter>,
 ) {
     let Some(&TileEvent::AttackEvent {
@@ -300,25 +298,15 @@ fn tile_attack(
         return;
     };
 
-    for (pos, mut owner, mut tile, mut level, mut health) in tile_query
+    tile_query
         .iter_mut()
         .filter(|(pos, ..)| targets.contains(&pos.as_grid_index()))
-    {
-        health.damage();
-        if health.0 > 0 && player_tile != PlayerTile::Farm {
-            continue;
-        }
-
-        level.0 = 1;
-        tile.0.set_player_tile(player_tile);
-        health.0 = match tile.0.terrain() {
-            Terrain::Mountain => 2,
-            Terrain::None => 1,
-            _ => 0,
-        };
-        owner.0 = Some(turn.player());
-        grid.set_owner(pos.as_grid_index(), Some(turn.player()));
-    }
+        .for_each(|(_, mut health, mut owner, mut tile, mut level)| {
+            if health.damage() == 0 || player_tile == PlayerTile::Farm {
+                (level.0, health.0, owner.0) = get_start_tuple(tile.0.terrain(), turn.player());
+                tile.0.set_player_tile(player_tile);
+            }
+        });
 
     turn_event.send(TurnEvent);
     update_image.send(UpdateImageEvent);
@@ -335,6 +323,20 @@ fn delete_if_disconnected(
     if changes.read().count() == 0 {
         return;
     }
+
+    tile_query
+        .iter_mut()
+        .filter(|(_, owner, ..)| owner.0.is_some())
+        .for_each(|(pos, mut owned, mut tile, mut level)| {
+            if !grid.is_connected_to_base(pos.clone().as_grid_index(), owned.0.unwrap()) {
+                tile.0.empty();
+                level.0 = 0;
+                owned.0 = None;
+
+                update_image.send(UpdateImageEvent);
+                update_grid.send(GridUpdateEvent);
+            }
+        });
 
     for (pos, mut owned, mut tile, mut level) in tile_query.iter_mut() {
         if owned.0.is_none() {
@@ -355,17 +357,15 @@ fn delete_if_disconnected(
 }
 
 fn update_grid(mut tile_query: Query<(&Position, &Owned)>, mut grid: ResMut<TileGrid>) {
-    for (pos, owned) in tile_query.iter_mut() {
-        grid.set_owner(pos.clone().as_grid_index(), owned.0);
-    }
+    tile_query.iter_mut().for_each(|t| grid.set_owner(t));
 }
 
 fn update_image(
     mut tile_query: Query<(&mut Handle<Image>, &Tile, &Level, &Owned)>,
     assets: Res<TileAssets>,
 ) {
-    for (mut image, tile, level, owner) in tile_query.iter_mut() {
-        *image = assets.get(tile.0, level.0, owner.0);
+    for (mut image, &Tile(tile), &Level(level), &Owned(owner)) in tile_query.iter_mut() {
+        *image = assets.get(tile, level, owner);
     }
 }
 

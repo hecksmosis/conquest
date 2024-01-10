@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.78"
 bevy = { version = "0.12.0", features = ["dynamic_linking"] }
+itertools = "0.12.0"
 rand = "0.8.5"
 strum = { version = "0.25.0", features = ["derive"] }
 

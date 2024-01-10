@@ -93,5 +93,5 @@ pub fn get_selected_grid_position(
 ) -> Option<Vec2> {
     attack_controller
         .selected
-        .or_else(|| grid.any_connected(mouse.grid_position(), player).then(|| mouse.grid_position()))
+        .or_else(|| grid.get_any_connected(mouse.grid_position(), player))
 }

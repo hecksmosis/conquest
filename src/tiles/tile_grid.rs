@@ -1,3 +1,4 @@
+use itertools::iproduct;
 use std::collections::VecDeque;
 
 use bevy::utils::HashSet;
@@ -16,6 +17,13 @@ impl TileGrid {
         x >= -MAP_WIDTH && y >= -MAP_HEIGHT && x < MAP_WIDTH && y < MAP_HEIGHT
     }
 
+    pub fn in_bounds_int(x: i32, y: i32) -> bool {
+        x >= -MAP_WIDTH as i32
+            && y >= -MAP_HEIGHT as i32
+            && x < MAP_WIDTH as i32
+            && y < MAP_HEIGHT as i32
+    }
+
     pub fn get_index(Vec2 { x, y }: Vec2) -> usize {
         if !Self::in_bounds(x, y) {
             return GRID_SIZE - 1;
@@ -24,13 +32,23 @@ impl TileGrid {
         (y + MAP_HEIGHT) as usize * (MAP_WIDTH as usize * 2) + (x + MAP_WIDTH) as usize
     }
 
+    pub fn get_index_from_position(pos: &Position) -> usize {
+        Self::get_index(pos.as_grid_index())
+    }
+
     pub fn get_tile(&self, index: Vec2) -> (Option<Player>, bool) {
         self.grid[Self::get_index(index)]
     }
 
-    pub fn set_owner(&mut self, index: Vec2, owner: Option<Player>) {
-        if Self::get_index(index) != GRID_SIZE - 1 {
-            self.grid[Self::get_index(index)].0 = owner;
+    pub fn get_tile_int(&self, x: i32, y: i32) -> (Option<Player>, bool) {
+        self.grid[Self::get_index(Vec2::new(x as f32, y as f32))]
+    }
+
+    pub fn set_owner(&mut self, (index, owner): (&Position, &Owned)) {
+        let idx = Self::get_index_from_position(index);
+
+        if idx != GRID_SIZE - 1 {
+            self.grid[idx].0 = owner.0;
         }
     }
 
@@ -54,11 +72,8 @@ impl TileGrid {
             .collect()
     }
 
-    pub fn any_connected(&self, pos: Vec2, owner: Player) -> bool {
-        ADYACENCIES.iter().any(|&(dx, dy)| {
-            let next_pos = pos + Vec2::new(dx, dy);
-            self.get_tile(next_pos).0 == Some(owner)
-        })
+    pub fn get_any_connected(&self, pos: Vec2, owner: Player) -> Option<Vec2> {
+        self.get_connected_tiles(pos, owner).first().copied()
     }
 
     pub fn is_connected_to_base(&self, start: Vec2, check_player: Player) -> bool {
@@ -75,28 +90,18 @@ impl TileGrid {
         visited.insert(start_tuple);
 
         while let Some((x, y)) = queue.pop_front() {
-            if let (Some(p), true) = self.get_tile(Vec2 {
-                x: x as f32,
-                y: y as f32,
-            }) {
+            if let (Some(p), true) = self.get_tile_int(x, y) {
                 if p == player {
                     return true;
                 }
             }
 
-            for &dir in &[(0, 1), (0, -1), (1, 0), (-1, 0)] {
-                let next_pos = (x + dir.0, y + dir.1);
-
-                if Self::in_bounds(next_pos.0 as f32, next_pos.1 as f32)
-                    && !visited.contains(&next_pos)
-                {
-                    if let (Some(tile), _) = self.get_tile(Vec2 {
-                        x: next_pos.0 as f32,
-                        y: next_pos.1 as f32,
-                    }) {
+            for (&x, &y) in iproduct!([x - 1, x + 1].iter(), [y - 1, y + 1].iter()) {
+                if Self::in_bounds_int(x, y) && !visited.contains(&(x, y)) {
+                    if let (Some(tile), _) = self.get_tile_int(x, y) {
                         if tile == player {
-                            queue.push_back(next_pos);
-                            visited.insert(next_pos);
+                            queue.push_back((x, y));
+                            visited.insert((x, y));
                         }
                     }
                 }
