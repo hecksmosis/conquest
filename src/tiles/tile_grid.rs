@@ -1,4 +1,3 @@
-use itertools::iproduct;
 use std::collections::VecDeque;
 
 use bevy::utils::HashSet;
@@ -12,16 +11,17 @@ pub struct TileGrid {
     pub grid: [(Option<Player>, bool); (MAP_WIDTH * MAP_HEIGHT * 4.0 + 1.0) as usize],
 }
 
+impl Default for TileGrid {
+    fn default() -> Self {
+        Self {
+            grid: [(None, false); GRID_SIZE],
+        }
+    }
+}
+
 impl TileGrid {
     pub fn in_bounds(x: f32, y: f32) -> bool {
         x >= -MAP_WIDTH && y >= -MAP_HEIGHT && x < MAP_WIDTH && y < MAP_HEIGHT
-    }
-
-    pub fn in_bounds_int(x: i32, y: i32) -> bool {
-        x >= -MAP_WIDTH as i32
-            && y >= -MAP_HEIGHT as i32
-            && x < MAP_WIDTH as i32
-            && y < MAP_HEIGHT as i32
     }
 
     pub fn get_index(Vec2 { x, y }: Vec2) -> usize {
@@ -40,15 +40,15 @@ impl TileGrid {
         self.grid[Self::get_index(index)]
     }
 
-    pub fn get_tile_int(&self, x: i32, y: i32) -> (Option<Player>, bool) {
+    pub fn get_tile_tup(&self, (x, y): (i32, i32)) -> (Option<Player>, bool) {
         self.grid[Self::get_index(Vec2::new(x as f32, y as f32))]
     }
 
-    pub fn set_owner(&mut self, (index, owner): (&Position, &Owned)) {
+    pub fn set_owner(&mut self, index: &Position, owner: Option<Player>) {
         let idx = Self::get_index_from_position(index);
 
         if idx != GRID_SIZE - 1 {
-            self.grid[idx].0 = owner.0;
+            self.grid[idx].0 = owner;
         }
     }
 
@@ -76,7 +76,11 @@ impl TileGrid {
         self.get_connected_tiles(pos, owner).first().copied()
     }
 
-    pub fn is_connected_to_base(&self, start: Vec2, check_player: Player) -> bool {
+    pub fn is_connected_to_base(&self, (start_position, owned): &(&Position, Mut<Owned>)) -> bool {
+        let Some(check_player) = owned.0 else {
+            return false;
+        };
+        let start = start_position.as_grid_index();
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
 
@@ -90,20 +94,18 @@ impl TileGrid {
         visited.insert(start_tuple);
 
         while let Some((x, y)) = queue.pop_front() {
-            if let (Some(p), true) = self.get_tile_int(x, y) {
-                if p == player {
-                    return true;
-                }
+            if self.get_tile_tup((x, y)) == (Some(player), true) {
+                return true;
             }
 
-            for (&x, &y) in iproduct!([x - 1, x + 1].iter(), [y - 1, y + 1].iter()) {
-                if Self::in_bounds_int(x, y) && !visited.contains(&(x, y)) {
-                    if let (Some(tile), _) = self.get_tile_int(x, y) {
-                        if tile == player {
-                            queue.push_back((x, y));
-                            visited.insert((x, y));
-                        }
-                    }
+            for &dir in &[(0, 1), (0, -1), (1, 0), (-1, 0)] {
+                let next_pos = (x + dir.0, y + dir.1);
+
+                if !visited.contains(&next_pos)
+                    && self.get_tile_tup(next_pos).0.is_some_and(|p| p == player)
+                {
+                    queue.push_back(next_pos);
+                    visited.insert(next_pos);
                 }
             }
         }

@@ -79,10 +79,11 @@ impl TileType {
         }
     }
 
-    pub fn set_player_tile(&mut self, player_tile: PlayerTile) {
+    pub fn with_player_tile(&self, player_tile: PlayerTile) -> Self {
         match self {
-            TileType::Empty(terrain) => *self = TileType::Occupied(player_tile, *terrain),
-            TileType::Occupied(_, terrain) => *self = TileType::Occupied(player_tile, *terrain),
+            TileType::Empty(terrain) | TileType::Occupied(_, terrain) => {
+                TileType::Occupied(player_tile, *terrain)
+            }
         }
     }
 

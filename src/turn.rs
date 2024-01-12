@@ -6,6 +6,7 @@ impl Plugin for TurnPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<TurnEvent>()
             .insert_resource(TurnCounter::new())
+            .add_systems(OnEnter(GameState::Terrain), reset_turn)
             .add_systems(Update, switch_turn);
     }
 }
@@ -42,4 +43,8 @@ fn switch_turn(
     attack_controller.deselect();
     tile_events.send(TileEvent::DeselectEvent);
     turn.next();
+}
+
+fn reset_turn(mut turn: ResMut<TurnCounter>) {
+    *turn = TurnCounter::new()
 }

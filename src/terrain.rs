@@ -5,6 +5,7 @@ pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TerrainCounter::default())
+            .add_systems(OnEnter(GameState::Terrain), reset)
             .add_systems(
                 Update,
                 (
@@ -151,4 +152,8 @@ fn remove_placement_text(mut commands: Commands, query: Query<Entity, With<Place
     for entity in query.iter() {
         commands.entity(entity).despawn_recursive();
     }
+}
+
+fn reset(mut terrain_counter: ResMut<TerrainCounter>) {
+    *terrain_counter = default()
 }

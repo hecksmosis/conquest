@@ -75,7 +75,8 @@ pub fn count_farms(farms: &Query<(&Tile, &Owned, &Level)>) -> [usize; 2] {
     farms
         .iter()
         .filter(|(Tile(tile_type), _, _)| tile_type.is_farm())
-        .fold([1; 2], |mut total, (_, Owned(owner), Level(level))| {
+        .fold([100; 2], |mut total, (_, Owned(owner), Level(level))| {
+            //TODO: change 100 to 1
             let Some(player) = owner else {
                 return total;
             };

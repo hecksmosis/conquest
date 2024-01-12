@@ -1,209 +1,115 @@
-use strum::Display;
-
 use crate::*;
 
 pub struct MenuPlugin;
 
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, create_menu)
-            .add_systems(Update, (open_menu, close_menu));
+        app.insert_resource(WinCounter::default())
+            .add_systems(OnEnter(GameState::Menu), setup_menu)
+            .add_systems(OnExit(GameState::Menu), cleanup)
+            .add_systems(Update, (menu_manager, update_player_wins).run_if(in_state(GameState::Menu)));
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct WinCounter {
+    wins: [usize; 2]   
+}
+
+impl WinCounter {
+    pub fn get(&self, player: Player) -> usize {
+        self.wins[player as usize]
+    }
+
+    pub fn increment(&mut self, player: Player, points: usize) {
+        self.wins[player as usize] += points;
     }
 }
 
 #[derive(Component)]
-pub struct Menu;
+pub struct PlayerWinsText;
 
-#[derive(Component, Display)]
-pub enum MenuOption {
-    Upgrade,
-    ConvertFarm,
-    Attack, //TODO
-}
+fn setup_menu(mut commands: Commands) {
+    let text = commands
+        .spawn(TextBundle {
+            text: Text::from_section(
+                "Play",
+                TextStyle {
+                    font_size: 40.0,
+                    color: Color::rgb(0.9, 0.9, 0.9),
+                    ..default()
+                },
+            ),
+            ..default()
+        })
+        .id();
 
-fn create_menu(mut commands: Commands) {
-    let text_style = TextStyle {
-        font_size: 30.0,
-        color: Color::WHITE,
-        ..default()
-    };
-
-    commands
-        .spawn(NodeBundle {
+    let button = commands
+        .spawn(ButtonBundle {
             style: Style {
-                width: Val::Percent(100.0),
-                height: Val::Percent(60.0),
-                position_type: PositionType::Absolute,
-                bottom: Val::Px(0.0),
-                justify_content: JustifyContent::SpaceBetween,
+                margin: UiRect::all(Val::Auto),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 ..default()
             },
             ..default()
         })
-        .with_children(|parent| {
-            parent
-                .spawn((
-                    NodeBundle {
-                        style: Style {
-                            width: Val::Px(250.),
-                            border: UiRect::all(Val::Px(2.)),
-                            ..default()
-                        },
-                        background_color: Color::rgb(0.65, 0.65, 0.65).into(),
-                        visibility: Visibility::Hidden,
-                        ..default()
-                    },
-                    Menu,
-                ))
-                .with_children(|parent| {
-                    parent
-                        .spawn(NodeBundle {
-                            style: Style {
-                                width: Val::Percent(100.),
-                                ..default()
-                            },
-                            background_color: Color::rgb(0.15, 0.15, 0.15).into(),
-                            ..default()
-                        })
-                        .with_children(|parent| {
-                            parent.spawn((
-                                TextBundle {
-                                    text: Text::from_sections([
-                                        TextSection {
-                                            value: "Tile: Empty\n".to_string(),
-                                            style: text_style.clone(),
-                                        },
-                                        TextSection {
-                                            value: "Level: 0\n".to_string(),
-                                            style: text_style.clone(),
-                                        },
-                                        TextSection {
-                                            value: "Health: 0\n".to_string(),
-                                            style: text_style.clone(),
-                                        },
-                                        TextSection {
-                                            value: "Option".to_string(),
-                                            style: text_style.clone(),
-                                        },
-                                    ]),
-                                    ..default()
-                                },
-                                Label,
-                            ));
-                        });
-                });
-        });
+        .insert_children(0, &[text])
+        .id();
+
+    commands.spawn((
+        TextBundle {
+            text: Text::from_section(
+                "Player Wins: 0",
+                TextStyle {
+                    font_size: 40.0,
+                    color: Color::rgb(0.9, 0.9, 0.9),
+                    ..default()
+                },
+            ),
+            ..Default::default()
+        },
+        PlayerWinsText,
+    ));
+
+    // Create a root UI entity for the menu
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                min_width: Val::Percent(100.0),
+                min_height: Val::Percent(100.0),
+                ..default()
+            },
+            ..default()
+        })
+        .insert_children(0, &[button]);
 }
 
-fn open_menu(
-    mouse: Res<GridMouse>,
-    mut events: EventReader<TileEvent>,
-    tile_query: Query<(&Position, &Tile, &Level, &Owned, &Health)>,
-    mut menu_root_query: Query<&mut Visibility, With<Menu>>,
-    mut menu_query: Query<(Entity, &mut Text), With<Label>>,
-    turn: Res<TurnCounter>,
-    mut commands: Commands,
-) {
-    let Some(&TileEvent::SelectEvent(selected_position)) = events.read().next() else {
-        return;
-    };
-
-    if let Some(Visibility::Visible) = menu_root_query.iter().next() {
-        return;
+pub fn cleanup(mut commands: Commands, mut entities: Query<Entity, Or<(With<Node>, With<PlayerWinsText>)>>) {
+    for ent in entities.iter_mut() {
+        commands.entity(ent).despawn_recursive()
     }
+}
 
-    info!("Opening menu");
-
-    if let Some((_, Tile(tile_type), Level(level), &Owned(Some(owner)), Health(hp))) = tile_query
+fn menu_manager(
+    interaction: Query<(&Interaction, &Button), Changed<Interaction>>,
+    mut state: ResMut<NextState<GameState>>,
+) {
+    interaction
         .iter()
-        .find(|(pos, ..)| pos.as_grid_index() == selected_position)
-    {
-        if owner != turn.player() {
-            return;
-        }
-        info!("Menu for tile at {:?}", mouse.as_position());
-
-        if let Some((ent, mut text)) = menu_query.iter_mut().next() {
-            text.sections[0].value = format!("Tile: {:?}\n", tile_type);
-            match tile_type {
-                TileType::Occupied(PlayerTile::Tile, _) => {
-                    text.sections[1].value = format!("Level: {}\n", level);
-                    text.sections[2].value = format!("Health: {}\n", hp);
-                }
-                TileType::Occupied(PlayerTile::Base, _) => {
-                    text.sections[2].value = format!("Health: {}\n", hp);
-                }
-                _ => {}
-            }
-
-            let mut menu_entity = commands.entity(ent);
-            let buttons = match tile_type {
-                TileType::Occupied(PlayerTile::Tile, Terrain::None) => vec![
-                    MenuOption::Attack,
-                    MenuOption::Upgrade,
-                    MenuOption::ConvertFarm,
-                ],
-                TileType::Occupied(PlayerTile::Tile, Terrain::Mountain) => {
-                    vec![MenuOption::Attack, MenuOption::ConvertFarm]
-                }
-                TileType::Occupied(PlayerTile::Base, _) => vec![MenuOption::Attack],
-                _ => vec![],
-            };
-
-            for option in buttons.iter() {
-                menu_entity.with_children(|parent| {
-                    parent
-                        .spawn(ButtonBundle {
-                            style: Style {
-                                width: Val::Percent(100.),
-                                height: Val::Px(50.),
-                                margin: UiRect::axes(Val::Px(2.0), Val::Px(2.0)),
-                                ..default()
-                            },
-                            background_color: Color::rgb(0.15, 0.15, 0.15).into(),
-                            ..default()
-                        })
-                        .with_children(|parent| {
-                            parent.spawn(TextBundle {
-                                text: Text::from_sections(vec![TextSection {
-                                    value: option.to_string(),
-                                    style: TextStyle {
-                                        font_size: 30.0,
-                                        color: Color::WHITE,
-                                        ..default()
-                                    },
-                                }]),
-                                ..default()
-                            });
-                        });
-                });
-            } // TODO: Make this way better
-
-            if let Some(mut visibility) = menu_root_query.iter_mut().next() {
-                *visibility = Visibility::Visible;
-            }
-        }
-    }
+        .filter(|(i, _)| matches!(i, Interaction::Pressed))
+        .for_each(|_| {
+            state.set(GameState::Terrain);
+        })
 }
 
-fn close_menu(
-    mut menu_root_query: Query<&mut Visibility, With<Menu>>,
-    mut menu_query: Query<&mut Text, With<Label>>,
-    mut events: EventReader<TileEvent>,
+fn update_player_wins(
+    player_wins: Res<WinCounter>,
+    mut query: Query<&mut Text, With<PlayerWinsText>>,
 ) {
-    let Some(TileEvent::DeselectEvent) = events.read().next() else {
-        return;
-    };
-
-    info!("Closing menu");
-
-    if let Some(mut text) = menu_query.iter_mut().next() {
-        text.sections[0].value = "Tile: Empty\n".to_string();
-        text.sections[1].value = "Level: 0\n".to_string();
-        text.sections[2].value = "Health: 0\n".to_string();
-
-        if let Some(mut visibility) = menu_root_query.iter_mut().next() {
-            *visibility = Visibility::Hidden;
-        }
+    for mut text in query.iter_mut() {
+        text.sections[0].value = format!("Player Wins: {}", player_wins.get(Player::Red));
     }
 }

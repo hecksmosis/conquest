@@ -1,3 +1,5 @@
+use bevy::ecs::component::Tick;
+
 use crate::*;
 
 pub struct DebugPlugin;
@@ -124,7 +126,7 @@ fn debug_connected_to_base(
             owned,
             health.0,
             grid.get_tile(pos.clone().as_grid_index()),
-            grid.is_connected_to_base(pos.clone().as_grid_index(), turn.player())
+            grid.is_connected_to_base(&(pos, Mut::new(&mut Owned(Some(turn.player())), &mut Tick::new(1), &mut Tick::new(4), Tick::new(5), Tick::new(10)), )),
         );
     }
 }
