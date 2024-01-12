@@ -124,7 +124,12 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, mut grid: ResMut<TileGrid>, assets: Res<TileAssets>, mut attack_controller: ResMut<AttackController>) {
+fn setup(
+    mut commands: Commands,
+    mut grid: ResMut<TileGrid>,
+    assets: Res<TileAssets>,
+    mut attack_controller: ResMut<AttackController>,
+) {
     *grid = default();
     (1..(MAP_HEIGHT * MAP_WIDTH * 4.0 - 1.0) as usize).for_each(|index| {
         _ = commands.spawn(TileBundle::blank(get_vec_from_index(index), &assets))

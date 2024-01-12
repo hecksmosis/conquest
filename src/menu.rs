@@ -7,13 +7,16 @@ impl Plugin for MenuPlugin {
         app.insert_resource(WinCounter::default())
             .add_systems(OnEnter(GameState::Menu), setup_menu)
             .add_systems(OnExit(GameState::Menu), cleanup)
-            .add_systems(Update, (menu_manager, update_player_wins).run_if(in_state(GameState::Menu)));
+            .add_systems(
+                Update,
+                (menu_manager, update_player_wins).run_if(in_state(GameState::Menu)),
+            );
     }
 }
 
 #[derive(Resource, Default)]
 pub struct WinCounter {
-    wins: [usize; 2]   
+    wins: [usize; 2],
 }
 
 impl WinCounter {
@@ -87,7 +90,10 @@ fn setup_menu(mut commands: Commands) {
         .insert_children(0, &[button]);
 }
 
-pub fn cleanup(mut commands: Commands, mut entities: Query<Entity, Or<(With<Node>, With<PlayerWinsText>)>>) {
+pub fn cleanup(
+    mut commands: Commands,
+    mut entities: Query<Entity, Or<(With<Node>, With<PlayerWinsText>)>>,
+) {
     for ent in entities.iter_mut() {
         commands.entity(ent).despawn_recursive()
     }
