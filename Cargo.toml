@@ -8,6 +8,11 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.78"
 bevy = { version = "0.12.0", features = ["dynamic_linking"] }
+bevy_ggrs = "0.14.0"
+bevy_matchbox = { version = "0.8.0", features = ["ggrs"] }
+bevy_renet = "0.0.10"
+bytemuck = { version = "1.14.0", features = ["derive"] }
+ggrs = "0.10.0"
 itertools = "0.12.0"
 rand = "0.8.5"
 strum = { version = "0.25.0", features = ["derive"] }

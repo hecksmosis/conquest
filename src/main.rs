@@ -8,12 +8,19 @@ use bevy::{
     utils::HashMap,
     window::{close_on_esc, PrimaryWindow},
 };
+use bevy_ggrs::{
+    GgrsConfig, GgrsPlugin, GgrsSchedule, LocalInputs, LocalPlayers, PlayerInputs, ReadInputs,
+    Session,
+};
+use bevy_matchbox::{matchbox_socket::PeerId, prelude::*};
+use bytemuck::{Pod, Zeroable};
 use camera::CameraPlugin;
 use consts::*;
 use debug::DebugPlugin;
 use farms::{FarmCounter, FarmPlugin};
 use grid_mouse::*;
 use hud::HUDPlugin;
+use input::*;
 use menu::{MenuPlugin, WinCounter};
 use player::*;
 use strum::IntoEnumIterator;
@@ -32,6 +39,7 @@ mod debug;
 mod farms;
 mod grid_mouse;
 mod hud;
+mod input;
 mod menu;
 mod player;
 mod terrain;
@@ -76,13 +84,19 @@ impl AttackController {
 pub enum GameState {
     #[default]
     Menu,
+    Lobby,
     Terrain,
     Game,
 }
 
+pub type Config = GgrsConfig<GameInput, PeerId>;
+
 fn main() {
+    let ggrs_plugin: GgrsPlugin<Config> = default();
+
     App::new()
         .add_state::<GameState>()
+        .add_plugins(ggrs_plugin)
         .add_plugins((
             DefaultPlugins,
             CameraPlugin,
@@ -100,24 +114,36 @@ fn main() {
         .add_event::<GameOverEvent>()
         .init_resource::<TileGrid>()
         .init_resource::<AttackController>()
-        .add_systems(OnEnter(GameState::Terrain), setup.after(menu::cleanup))
+        .add_systems(ReadInputs, read_local_inputs)
+        .add_systems(
+            OnEnter(GameState::Lobby),
+            start_matchbox_socket.after(menu::cleanup),
+        )
+        .add_systems(OnEnter(GameState::Terrain), setup)
         .add_systems(OnExit(GameState::Game), cleanup)
+        .add_systems(
+            GgrsSchedule,
+            (register_event.map(noop),).run_if(in_state(GameState::Game)),
+        )
+        .add_systems(
+            GgrsSchedule,
+            ((
+                select_tile,
+                tile_attack.pipe(send_events),
+                upgrade.pipe(send_events),
+                update_selection,
+                update_grid
+                    .pipe(delete_if_disconnected)
+                    .pipe(check_win)
+                    .run_if(grid_update_event),
+                main_menu,
+            )
+                .run_if(in_state(GameState::Game)),),
+        )
         .add_systems(
             Update,
             (
-                (
-                    select_tile,
-                    tile_attack.pipe(send_events),
-                    upgrade.pipe(send_events),
-                    register_event.map(noop),
-                    update_selection,
-                    update_grid
-                        .pipe(delete_if_disconnected)
-                        .pipe(check_win)
-                        .run_if(grid_update_event),
-                    main_menu,
-                )
-                    .run_if(in_state(GameState::Game)),
+                (wait_for_players).run_if(in_state(GameState::Lobby)),
                 close_on_esc,
             ),
         )
@@ -186,44 +212,54 @@ pub(crate) struct TurnEvent;
 #[derive(Event)]
 pub struct GridUpdateEvent;
 
-#[derive(Event, Debug)]
-pub enum TileEvent {
-    UpgradeEvent {
-        target: Vec2,
-        hp: usize,
-    },
-    AttackEvent {
-        targets: Vec<Vec2>,
-        player_tile: PlayerTile,
-    },
-    SelectEvent(Vec2),
-    DeselectEvent,
-}
-
-impl TileEvent {
-    pub fn unwrap_attack(&self) -> Option<(&Vec<Vec2>, PlayerTile)> {
-        match self {
-            TileEvent::AttackEvent {
-                ref targets,
-                player_tile,
-            } => Some((targets, *player_tile)),
-            _ => None,
-        }
-    }
-
-    pub fn unwrap_upgrade(&self) -> Option<(&Vec2, usize)> {
-        match self {
-            TileEvent::UpgradeEvent { ref target, hp } => Some((target, *hp)),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Event)]
 pub struct GameOverEvent(pub Player);
 
+fn start_matchbox_socket(mut commands: Commands) {
+    let room_url = "ws://127.0.0.1:3536/extreme_bevy?next=2";
+    info!("connecting to matchbox server: {room_url}");
+    commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
+}
+
+fn wait_for_players(
+    mut commands: Commands,
+    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+    mut state: ResMut<NextState<GameState>>,
+) {
+    if socket.get_channel(0).is_err() {
+        return; // we've already started
+    }
+
+    // Check for new connections
+    socket.update_peers();
+    let players = socket.players();
+
+    let num_players = 2;
+    if players.len() < num_players {
+        return; // wait for more players
+    }
+
+    info!("All peers have joined, going in-game");
+    let mut session_builder = ggrs::SessionBuilder::<Config>::new()
+        .with_num_players(num_players)
+        .with_input_delay(2);
+
+    for (i, player) in players.into_iter().enumerate() {
+        session_builder = session_builder
+            .add_player(player, i)
+            .expect("failed to add player");
+    }
+
+    let ggrs_session = session_builder
+        .start_p2p_session(socket.take_channel(0).unwrap())
+        .expect("failed to start session");
+
+    commands.insert_resource(Session::P2P(ggrs_session));
+    state.set(GameState::Terrain);
+}
+
 fn register_event(
-    (mouse, mut buttons): (Res<GridMouse>, ResMut<Input<MouseButton>>),
+    (mouse, buttons): (Res<GridMouse>, Res<PlayerInputs<Config>>),
     mut event: EventWriter<TileEvent>,
     mut tile_query: Query<(&Position, &mut Owned, &mut Tile)>,
     attack_controller: Res<AttackController>,
@@ -231,16 +267,12 @@ fn register_event(
     farms: Res<FarmCounter>,
     grid: Res<TileGrid>,
 ) -> Option<()> {
-    const BUTTONS: [MouseButton; 2] = [MouseButton::Left, MouseButton::Right];
-    let (button, owner, tile) = buttons
-        .get_just_pressed()
-        .find(|x| BUTTONS.contains(x))
-        .and_then(|button| {
-            tile_query
-                .iter_mut()
-                .find(|(pos, ..)| pos.as_grid_index() == mouse.grid_position())
-                .map(|tile| (button, tile.1 .0, tile.2 .0))
-        })?;
+    let (button, owner, tile) = buttons[0].0.get_buttons().next().and_then(|button| {
+        tile_query
+            .iter_mut()
+            .find(|(pos, ..)| pos.as_grid_index() == mouse.grid_position())
+            .map(|tile| (button, tile.1 .0, tile.2 .0))
+    })?;
 
     let farms_available = farms.available_farms(turn.player());
     let targets = get_attack_targets(
@@ -252,20 +284,19 @@ fn register_event(
     info!("Targets: {:?}", targets);
     match (tile.player_tile(), owner, button, farms_available) {
         (Some(PlayerTile::Tile), Some(p), MouseButton::Right, _) if p == turn.player() => event
-            .send(TileEvent::AttackEvent {
+            .send(TileEvent::Attack {
                 targets,
                 player_tile: PlayerTile::Farm,
             }),
         (Some(PlayerTile::Tile), Some(p), MouseButton::Left, 1..)
         | (Some(PlayerTile::Farm), Some(p), MouseButton::Left, _) // Farm upgrades are free (balancing TODO)
-            if p == turn.player() => event.send(TileEvent::UpgradeEvent { target: mouse.grid_position(), hp: tile.is_tile() as usize} ),
-        (.., MouseButton::Left, available @ 1..) if available >= targets.len() && !targets.is_empty() => event.send(TileEvent::AttackEvent {
+            if p == turn.player() => event.send(TileEvent::Upgrade { target: mouse.grid_position(), hp: tile.is_tile() as usize} ),
+        (.., MouseButton::Left, available @ 1..) if available >= targets.len() && !targets.is_empty() => event.send(TileEvent::Attack {
             targets,
             player_tile: PlayerTile::Tile,
         }),
         _ => (),
     }
-    buttons.clear();
     Some(())
 }
 
@@ -280,7 +311,7 @@ fn select_tile(
     keys.just_pressed(KeyCode::Space).then(|| {
         if attack_controller.selected.is_some() {
             attack_controller.deselect();
-            events.send(TileEvent::DeselectEvent);
+            events.send(TileEvent::Deselect);
         } else if let Some(level) =
             tile_query
                 .iter_mut()
@@ -292,7 +323,7 @@ fn select_tile(
                 })
         {
             attack_controller.select(mouse.grid_position(), level);
-            events.send(TileEvent::SelectEvent(mouse.grid_position()));
+            events.send(TileEvent::Select(mouse.grid_position()));
         }
     });
 }

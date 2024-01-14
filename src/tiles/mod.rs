@@ -2,9 +2,11 @@ use crate::*;
 use strum::EnumIter;
 pub use tile_bundle::*;
 pub use tile_grid::*;
+pub use tile_event::*;
 
 pub mod tile_bundle;
 pub mod tile_grid;
+pub mod tile_event;
 
 #[derive(Component, Clone, Debug, Default)]
 pub struct Tile(pub TileType);

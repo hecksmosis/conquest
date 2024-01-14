@@ -41,7 +41,7 @@ fn switch_turn(
     }
 
     attack_controller.deselect();
-    tile_events.send(TileEvent::DeselectEvent);
+    tile_events.send(TileEvent::Deselect);
     turn.next();
 }
 

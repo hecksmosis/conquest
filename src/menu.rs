@@ -107,7 +107,7 @@ fn menu_manager(
         .iter()
         .filter(|(i, _)| matches!(i, Interaction::Pressed))
         .for_each(|_| {
-            state.set(GameState::Terrain);
+            state.set(GameState::Lobby);
         })
 }
 
