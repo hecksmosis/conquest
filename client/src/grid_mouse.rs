@@ -19,10 +19,6 @@ impl GridMouse {
     pub fn grid_position(&self) -> Vec2 {
         self.position / TILE_SIZE
     }
-
-    pub fn as_position(&self) -> Position {
-        Position(self.position + TILE_SIZE / 2.0)
-    }
 }
 
 fn update_mouse_position(

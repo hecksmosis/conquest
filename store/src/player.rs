@@ -1,8 +1,10 @@
+use crate::*;
 use strum::{Display, EnumIter, EnumString};
 
-#[derive(Copy, Clone, PartialEq, Debug, Eq, Hash, EnumString, Display, EnumIter)]
+#[derive(Copy, Clone, PartialEq, Debug, Eq, Hash, EnumString, Display, EnumIter, Deserialize, Serialize, Default)]
 pub enum Player {
     #[strum(serialize = "red")]
+    #[default]
     Red,
     #[strum(serialize = "blue")]
     Blue,
