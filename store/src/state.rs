@@ -138,7 +138,8 @@ impl GameState {
 
                 match (self.grid.get_tile(*position).owner(), action) {
                     (None, GameInput::Mouse(MouseButton::Left))
-                        if TileGrid::in_bounds_index(position) =>
+                        if TileGrid::in_bounds_index(position)
+                            && self.terrain_controller.can_add(self.turn) =>
                     {
                         Some(GameAction::MakeTerrain(
                             *position,
@@ -267,6 +268,7 @@ impl GameState {
 
             GameAction::MakeTerrain(position, terrain) => {
                 self.grid.set_tile(position, TileType::Empty(terrain));
+                self.terrain_controller.set(terrain, self.turn);
                 vec![ClientEvent::TileChanges(vec![TileChange {
                     position,
                     tile: self.grid.get_tile(position),

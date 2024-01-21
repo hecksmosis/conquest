@@ -169,15 +169,15 @@ impl TileGrid {
                     terrain,
                     owner: player,
                     level: 1,
-                    hp: 1,
+                    hp: terrain.get_health(),
                 };
-            } else {
+            } else if let TileType::Empty(terrain) = self.grid[idx] {
                 self.grid[idx] = TileType::Occupied {
                     player_tile: PlayerTile::Tile,
-                    terrain: Terrain::None,
+                    terrain,
                     owner: player,
                     level: 1,
-                    hp: 1,
+                    hp: terrain.get_health(),
                 };
             }
         }

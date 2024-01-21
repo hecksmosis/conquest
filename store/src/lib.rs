@@ -63,9 +63,6 @@ impl From<Position> for Transform {
     }
 }
 
-#[derive(Component, Clone, Debug, Default)]
-pub struct Owned(pub Option<Player>);
-
 #[derive(Event, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum ClientEvent {
     Init(Box<TileGrid>),
@@ -77,6 +74,9 @@ pub enum ClientEvent {
     Farms([usize; 2]),
     GamePhase(ClientState),
 }
+
+#[derive(Component, Clone, Debug, Default, Serialize, Deserialize)]
+pub struct StartGame;
 
 #[derive(Component, Copy, Clone, Default, PartialEq, Debug, Eq, Hash, Deserialize, Serialize)]
 pub enum Terrain {
@@ -108,8 +108,11 @@ impl std::fmt::Display for Terrain {
 
 #[derive(States, Reflect, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ClientState {
-    Menu,
     #[default]
+    Menu,
+    Lobby,
     Terrain,
     Game,
 }
+
+pub struct Username(String);

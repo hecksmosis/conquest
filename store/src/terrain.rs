@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use crate::*;
 
 #[derive(Resource, Clone, Debug)]
@@ -20,28 +18,23 @@ impl Default for TerrainCounter {
 }
 
 impl TerrainCounter {
-    pub fn add(&mut self, tile_type: Terrain, player: Player) -> Result<(), Box<dyn Error>> {
-        if (tile_type == Terrain::Mountain
-            && self.mountain_count[player as usize] >= MAX_MOUNTAIN_COUNT)
-            || (tile_type == Terrain::Water && self.water_count[player as usize] >= MAX_WATER_COUNT)
-        {
-            return Err("Too many mountains or water".into());
+    pub fn can_add(&self, player: Player) -> bool {
+        match self.placement_mode {
+            Terrain::Mountain => self.mountain_count[player as usize] < MAX_MOUNTAIN_COUNT,
+            Terrain::Water => self.water_count[player as usize] < MAX_WATER_COUNT,
+            _ => true,
         }
+    }
 
+    pub fn set(&mut self, tile_type: Terrain, player: Player) {
         match tile_type {
             Terrain::Mountain => self.mountain_count[player as usize] += 1,
             Terrain::Water => self.water_count[player as usize] += 1,
-            _ => (),
-        }
-
-        Ok(())
-    }
-
-    pub fn remove(&mut self, tile_type: Terrain, player: Player) {
-        match tile_type {
-            Terrain::Mountain => self.mountain_count[player as usize] -= 1,
-            Terrain::Water => self.water_count[player as usize] -= 1,
-            _ => (),
+            Terrain::None => match self.placement_mode {
+                Terrain::Mountain => self.mountain_count[player as usize] = self.mountain_count[player as usize].saturating_sub(1),
+                Terrain::Water => self.water_count[player as usize] = self.water_count[player as usize].saturating_sub(1),
+                _ => (),
+            },
         }
     }
 }

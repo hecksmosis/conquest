@@ -49,21 +49,22 @@ fn main() {
     ));
     app.add_event::<TileEvent>().add_event::<ClientEvent>();
 
-    let (client, transport) = new_renet_client();
-    app.insert_resource(client).insert_resource(transport);
+
 
     app.insert_resource(EntityTable {
         tiles: HashMap::default(),
         selector: None,
     });
 
-    app.add_systems(OnEnter(ClientState::Terrain), setup.after(menu::cleanup))
+    app.add_systems(OnEnter(ClientState::Lobby), insert_client)
+        .add_systems(OnEnter(ClientState::Terrain), setup.after(menu::cleanup))
         .add_systems(OnExit(ClientState::Game), cleanup)
         .add_systems(
             Update,
             (
-                register_event.map(noop),
-                receive_events_from_server,
+                register_event.map(noop).run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
+                receive_events_from_server.run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
+                start_game.run_if(in_state(ClientState::Lobby)),
                 panic_on_error_system,
                 close_on_esc,
             ),
@@ -76,6 +77,21 @@ fn main() {
 pub struct EntityTable {
     pub tiles: HashMap<usize, Entity>,
     pub selector: Option<Entity>,
+}
+
+fn insert_client(world: &mut World) {
+    let (client, transport) = new_renet_client();
+    world.insert_resource(client);
+    world.insert_resource(transport);
+}
+
+fn start_game(mut client: ResMut<RenetClient>, mut next_state: ResMut<NextState<ClientState>>) {
+    if let Some(message) = client.receive_message(DefaultChannel::ReliableOrdered) {
+        let event: StartGame = bincode::deserialize(&message).unwrap();
+        info!("{:#?}", event);
+
+        next_state.set(ClientState::Terrain);
+    }
 }
 
 fn new_renet_client() -> (RenetClient, NetcodeClientTransport) {

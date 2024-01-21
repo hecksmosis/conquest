@@ -1,7 +1,5 @@
 use std::{
-    net::{SocketAddr, UdpSocket},
-    thread,
-    time::{Duration, Instant, SystemTime},
+    net::{SocketAddr, UdpSocket}, thread, time::{Duration, Instant, SystemTime}
 };
 
 use bincode::ErrorKind;
@@ -9,7 +7,7 @@ use log::{info, warn};
 use renet::{
     transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig}, ConnectionConfig, DefaultChannel, RenetServer, ServerEvent
 };
-use store::{ClientEvent, TileEvent};
+use store::{ClientEvent, GameState, StartGame, TileEvent};
 
 const PROTOCOL_ID: u64 = 7;
 
@@ -32,7 +30,7 @@ fn main() {
 
     let mut transport = NetcodeServerTransport::new(server_config, socket).unwrap();
 
-    let mut game_state = store::GameState::default();
+    let mut game_state = GameState::default();
     let mut last_updated = Instant::now();
 
     loop {
@@ -60,11 +58,18 @@ fn main() {
                     println!("Player {} is {:?}", client_id, game_state.id_to_player.get(&client_id.raw()));
 
                     if server.connected_clients() == 2 {
+                        server.broadcast_message(DefaultChannel::ReliableOrdered, bincode::serialize(&StartGame).unwrap());
                         server.broadcast_message(DefaultChannel::ReliableOrdered, bincode::serialize(&ClientEvent::Init(Box::new(game_state.grid.clone()))).unwrap());
                     }
                 }
                 ServerEvent::ClientDisconnected { client_id, reason } => {
-                    info!("Player {} disconnected: {}", client_id, reason);
+                    println!("Player {} disconnected: {}", client_id, reason);
+                    
+                    // Exit the server on client disconnect for now
+                    std::process::exit(0);
+                    //server.broadcast_message(DefaultChannel::ReliableOrdered, bincode::serialize(&ClientEvent::GamePhase(store::ClientState::Menu)).unwrap());
+                    //game_state = GameState::default();
+                    // TODO: Reset game state
                 }
             }
         }
