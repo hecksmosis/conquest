@@ -4,9 +4,8 @@ pub struct HUDPlugin;
 
 impl Plugin for HUDPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Terrain), setup_hud)
-            .add_systems(OnExit(GameState::Game), remove_hud)
-            .add_systems(Update, (count_farms, set_turn));
+        app.add_systems(OnEnter(ClientState::Terrain), setup_hud)
+            .add_systems(OnExit(ClientState::Game), remove_hud);
     }
 }
 
@@ -120,17 +119,11 @@ fn remove_hud(
     }
 }
 
-fn count_farms(farms: Res<FarmCounter>, mut query: Query<(&mut Text, &FarmText)>) {
-    for (i, (mut text, _)) in query.iter_mut().enumerate() {
-        text.sections[1].value = farms.available_farms(i.into()).to_string();
-    }
-}
-
-fn set_turn(mut query: Query<&mut Text, With<TurnText>>, turn: Res<TurnCounter>) {
-    for mut text in &mut query {
-        (text.sections[1].value, text.sections[1].style.color) = match turn.player() {
-            Player::Red => ("Red".to_string(), Color::rgb(1.0, 0.0, 0.0)),
-            Player::Blue => ("Blue".to_string(), Color::rgb(0.0, 0.0, 1.0)),
-        };
-    }
-}
+// fn set_turn(mut query: Query<&mut Text, With<TurnText>>, turn: Res<TurnCounter>) {
+//     for mut text in &mut query {
+//         (text.sections[1].value, text.sections[1].style.color) = match turn.player() {
+//             Player::Red => ("Red".to_string(), Color::rgb(1.0, 0.0, 0.0)),
+//             Player::Blue => ("Blue".to_string(), Color::rgb(0.0, 0.0, 1.0)),
+//         };
+//     }
+// }

@@ -5,11 +5,11 @@ pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(WinCounter::default())
-            .add_systems(OnEnter(GameState::Menu), setup_menu)
-            .add_systems(OnExit(GameState::Menu), cleanup)
+            .add_systems(OnEnter(ClientState::Menu), setup_menu)
+            .add_systems(OnExit(ClientState::Menu), cleanup)
             .add_systems(
                 Update,
-                (menu_manager, update_player_wins).run_if(in_state(GameState::Menu)),
+                (menu_manager, update_player_wins).run_if(in_state(ClientState::Menu)),
             );
     }
 }
@@ -101,13 +101,13 @@ pub fn cleanup(
 
 fn menu_manager(
     interaction: Query<(&Interaction, &Button), Changed<Interaction>>,
-    mut state: ResMut<NextState<GameState>>,
+    mut state: ResMut<NextState<ClientState>>,
 ) {
     interaction
         .iter()
         .filter(|(i, _)| matches!(i, Interaction::Pressed))
         .for_each(|_| {
-            state.set(GameState::Terrain);
+            state.set(ClientState::Lobby);
         })
 }
 
