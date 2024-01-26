@@ -1,5 +1,5 @@
 use std::{
-    net::{SocketAddr, UdpSocket}, thread, time::{Duration, Instant, SystemTime}
+    collections::HashMap, net::{SocketAddr, UdpSocket}, thread, time::{Duration, Instant, SystemTime}
 };
 
 use bincode::ErrorKind;
@@ -32,6 +32,8 @@ fn main() {
 
     let mut game_state = GameState::default();
     let mut last_updated = Instant::now();
+
+    let mut usernames: HashMap<u64, String> = HashMap::new();
 
     loop {
         let now = Instant::now();
@@ -67,9 +69,6 @@ fn main() {
                     
                     // Exit the server on client disconnect for now
                     std::process::exit(0);
-                    //server.broadcast_message(DefaultChannel::ReliableOrdered, bincode::serialize(&ClientEvent::GamePhase(store::ClientState::Menu)).unwrap());
-                    //game_state = GameState::default();
-                    // TODO: Reset game state
                 }
             }
         }
@@ -77,6 +76,11 @@ fn main() {
         for client_id in server.clients_id() {
             while let Some(message) = server.receive_message(client_id, DefaultChannel::ReliableOrdered) {
                 bincode::deserialize::<TileEvent>(&message).map(|event| {
+                    if let TileEvent::GetUsername { ref username } = event {
+                        usernames.insert(client_id.raw(), username.clone());
+                        return Ok(());
+                    }
+
                     game_state.get_action(&event).map(|action| {
                         game_state.consume(&action).iter().for_each(|change| {
                             info!("Sending:\n\t{:#?}", change);

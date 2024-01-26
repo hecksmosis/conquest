@@ -49,8 +49,6 @@ fn main() {
     ));
     app.add_event::<TileEvent>().add_event::<ClientEvent>();
 
-
-
     app.insert_resource(EntityTable {
         tiles: HashMap::default(),
         selector: None,
@@ -62,8 +60,11 @@ fn main() {
         .add_systems(
             Update,
             (
-                register_event.map(noop).run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
-                receive_events_from_server.run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
+                register_event
+                    .map(noop)
+                    .run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
+                receive_events_from_server
+                    .run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
                 start_game.run_if(in_state(ClientState::Lobby)),
                 panic_on_error_system,
                 close_on_esc,
@@ -90,6 +91,13 @@ fn start_game(mut client: ResMut<RenetClient>, mut next_state: ResMut<NextState<
         let event: StartGame = bincode::deserialize(&message).unwrap();
         info!("{:#?}", event);
 
+        client.send_message(
+            DefaultChannel::ReliableOrdered,
+            bincode::serialize(&TileEvent::GetUsername {
+                username: "hello".to_string(),
+            }).unwrap(),
+        );
+
         next_state.set(ClientState::Terrain);
     }
 }
@@ -105,7 +113,7 @@ fn new_renet_client() -> (RenetClient, NetcodeClientTransport) {
         client_id,
         protocol_id: PROTOCOL_ID,
         server_addr,
-        user_data: None,
+        user_data: Some(Username("hello".to_string()).to_netcode_user_data()),
     };
 
     let transport = NetcodeClientTransport::new(current_time, authentication, socket).unwrap();

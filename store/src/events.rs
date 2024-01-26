@@ -18,6 +18,9 @@ pub enum GameEvent {
 
 #[derive(Event, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum TileEvent {
+    GetUsername {
+        username: String,
+    },
     TileAction {
         client_id: u64,
         position: Vec2,
