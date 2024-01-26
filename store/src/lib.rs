@@ -119,7 +119,11 @@ pub enum ClientState {
 pub struct Username(String);
 
 impl Username {
-    fn to_netcode_user_data(&self) -> [u8; NETCODE_USER_DATA_BYTES] {
+    pub fn new(username: String) -> Self {
+        Self(username)
+    }
+
+    pub fn to_netcode_user_data(&self) -> [u8; NETCODE_USER_DATA_BYTES] {
         let mut user_data = [0u8; NETCODE_USER_DATA_BYTES];
         if self.0.len() > NETCODE_USER_DATA_BYTES - 8 {
             panic!("Username is too big");
@@ -130,7 +134,7 @@ impl Username {
         user_data
     }
 
-    fn from_user_data(user_data: &[u8; NETCODE_USER_DATA_BYTES]) -> Self {
+    pub fn from_user_data(user_data: &[u8; NETCODE_USER_DATA_BYTES]) -> Self {
         let mut buffer = [0u8; 8];
         buffer.copy_from_slice(&user_data[0..8]);
         let mut len = u64::from_le_bytes(buffer) as usize;

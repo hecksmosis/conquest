@@ -108,7 +108,7 @@ fn new_renet_client() -> (RenetClient, NetcodeClientTransport) {
         client_id,
         protocol_id: PROTOCOL_ID,
         server_addr,
-        user_data: None,
+        user_data: Some(Username::new("Hello".to_string()).to_netcode_user_data()),
     };
 
     let transport = NetcodeClientTransport::new(current_time, authentication, socket).unwrap();

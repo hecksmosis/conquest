@@ -1,11 +1,14 @@
 use std::{
-    net::{SocketAddr, UdpSocket}, thread, time::{Duration, Instant, SystemTime}
+    net::{SocketAddr, UdpSocket},
+    thread,
+    time::{Duration, Instant, SystemTime},
 };
 
 use bincode::ErrorKind;
 use log::{info, warn};
 use renet::{
-    transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig}, ConnectionConfig, DefaultChannel, RenetServer, ServerEvent
+    transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig},
+    ConnectionConfig, DefaultChannel, RenetServer, ServerEvent,
 };
 use store::{ClientEvent, GameState, StartGame, TileEvent};
 
@@ -18,7 +21,9 @@ fn main() {
     let connection_config = ConnectionConfig::default();
     let mut server: RenetServer = RenetServer::new(connection_config);
 
-    let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+    let current_time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
     let server_config = ServerConfig {
         current_time,
         max_clients: 2,
@@ -55,16 +60,29 @@ fn main() {
                         },
                     );
 
-                    println!("Player {} is {:?}", client_id, game_state.id_to_player.get(&client_id.raw()));
+                    println!(
+                        "Player {} is {:?}",
+                        client_id,
+                        game_state.id_to_player.get(&client_id.raw())
+                    );
 
                     if server.connected_clients() == 2 {
-                        server.broadcast_message(DefaultChannel::ReliableOrdered, bincode::serialize(&StartGame).unwrap());
-                        server.broadcast_message(DefaultChannel::ReliableOrdered, bincode::serialize(&ClientEvent::Init(Box::new(game_state.grid.clone()))).unwrap());
+                        server.broadcast_message(
+                            DefaultChannel::ReliableOrdered,
+                            bincode::serialize(&StartGame).unwrap(),
+                        );
+                        server.broadcast_message(
+                            DefaultChannel::ReliableOrdered,
+                            bincode::serialize(&ClientEvent::Init(Box::new(
+                                game_state.grid.clone(),
+                            )))
+                            .unwrap(),
+                        );
                     }
                 }
                 ServerEvent::ClientDisconnected { client_id, reason } => {
                     println!("Player {} disconnected: {}", client_id, reason);
-                    
+
                     // Exit the server on client disconnect for now
                     std::process::exit(0);
                 }
@@ -72,17 +90,28 @@ fn main() {
         }
 
         for client_id in server.clients_id() {
-            while let Some(message) = server.receive_message(client_id, DefaultChannel::ReliableOrdered) {
-                bincode::deserialize::<TileEvent>(&message).map(|event| {
-                    game_state.get_action(&event).map(|action| {
-                        game_state.consume(&action).iter().for_each(|change| {
-                            info!("Sending:\n\t{:#?}", change);
-                            server.broadcast_message(DefaultChannel::ReliableOrdered, bincode::serialize(change).unwrap());
-                        });
-                    }).ok_or(Box::new(ErrorKind::Custom("Invalid action".to_string())))
-                }).map_err(|err| {
-                    warn!("Error: {}", err);
-                }).ok();
+            while let Some(message) =
+                server.receive_message(client_id, DefaultChannel::ReliableOrdered)
+            {
+                bincode::deserialize::<TileEvent>(&message)
+                    .map(|event| {
+                        game_state
+                            .get_action(&event)
+                            .map(|action| {
+                                game_state.consume(&action).iter().for_each(|change| {
+                                    info!("Sending:\n\t{:#?}", change);
+                                    server.broadcast_message(
+                                        DefaultChannel::ReliableOrdered,
+                                        bincode::serialize(change).unwrap(),
+                                    );
+                                });
+                            })
+                            .ok_or(Box::new(ErrorKind::Custom("Invalid action".to_string())))
+                    })
+                    .map_err(|err| {
+                        warn!("Error: {}", err);
+                    })
+                    .ok();
             }
         }
 
