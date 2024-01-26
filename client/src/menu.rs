@@ -1,4 +1,7 @@
+use std::vec;
+
 use crate::*;
+use bevy_simple_text_input::TextInput;
 
 pub struct MenuPlugin;
 
@@ -47,9 +50,21 @@ fn setup_menu(mut commands: Commands) {
         })
         .id();
 
+    let text_input = commands
+        .spawn((
+            NodeBundle {
+                background_color: Color::rgb(0.1, 0.1, 0.1).into(),
+                ..default()
+            },
+            TextInput::default(),
+        ))
+        .id();
+
     let button = commands
         .spawn(ButtonBundle {
             style: Style {
+                display: Display::Grid,
+                grid_template_columns: vec![],
                 margin: UiRect::all(Val::Auto),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
@@ -57,7 +72,7 @@ fn setup_menu(mut commands: Commands) {
             },
             ..default()
         })
-        .insert_children(0, &[text])
+        .insert_children(0, &[text_input, text])
         .id();
 
     commands.spawn((

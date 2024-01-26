@@ -21,7 +21,7 @@ fn main() {
     let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
     let server_config = ServerConfig {
         current_time,
-        max_clients: 64,
+        max_clients: 2,
         protocol_id: PROTOCOL_ID,
         public_addresses: vec![public_addr],
         authentication: ServerAuthentication::Unsecure,
@@ -67,9 +67,6 @@ fn main() {
                     
                     // Exit the server on client disconnect for now
                     std::process::exit(0);
-                    //server.broadcast_message(DefaultChannel::ReliableOrdered, bincode::serialize(&ClientEvent::GamePhase(store::ClientState::Menu)).unwrap());
-                    //game_state = GameState::default();
-                    // TODO: Reset game state
                 }
             }
         }

@@ -95,18 +95,7 @@ impl GameState {
                             self.get_targets(tile_event).unwrap_or_default(),
                         ))
                     }
-                    (.., GameInput::Mouse(MouseButton::Left), 0) => {
-                        println!("no available attacks");
-                        None
-                    }
-                    (.., GameInput::Mouse(MouseButton::Left), _) => {
-                        println!("invalid action c1: {:?}", self.get_targets(tile_event));
-                        None
-                    }
-                    _ => {
-                        println!("invalid action c2");
-                        None
-                    }
+                    _ => None,
                 }
             }
 

@@ -918,6 +918,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_simple_text_input"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ceeeee4876eb735100420481baafc28341d95db4363977c776f8867b96b5bcdb"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "bevy_sprite"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1392,6 +1401,7 @@ dependencies = [
  "anyhow",
  "bevy",
  "bevy_renet",
+ "bevy_simple_text_input",
  "bincode",
  "itertools",
  "rand",
@@ -3296,6 +3306,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
+ "renetcode",
  "serde",
  "serde_json",
  "strum",

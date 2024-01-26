@@ -2,6 +2,7 @@ use std::{fmt::Formatter, net::{IpAddr, Ipv4Addr, SocketAddr}};
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+use renetcode::NETCODE_USER_DATA_BYTES;
 
 pub use consts::*;
 pub use events::*;
@@ -116,3 +117,25 @@ pub enum ClientState {
 }
 
 pub struct Username(String);
+
+impl Username {
+    fn to_netcode_user_data(&self) -> [u8; NETCODE_USER_DATA_BYTES] {
+        let mut user_data = [0u8; NETCODE_USER_DATA_BYTES];
+        if self.0.len() > NETCODE_USER_DATA_BYTES - 8 {
+            panic!("Username is too big");
+        }
+        user_data[0..8].copy_from_slice(&(self.0.len() as u64).to_le_bytes());
+        user_data[8..self.0.len() + 8].copy_from_slice(self.0.as_bytes());
+
+        user_data
+    }
+
+    fn from_user_data(user_data: &[u8; NETCODE_USER_DATA_BYTES]) -> Self {
+        let mut buffer = [0u8; 8];
+        buffer.copy_from_slice(&user_data[0..8]);
+        let mut len = u64::from_le_bytes(buffer) as usize;
+        len = len.min(NETCODE_USER_DATA_BYTES - 8);
+        let username = String::from_utf8(user_data[8..len + 8].to_vec()).unwrap();
+        Self(username)
+    }
+}

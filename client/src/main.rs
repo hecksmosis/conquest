@@ -14,6 +14,7 @@ use bevy_renet::{
     transport::NetcodeClientPlugin,
     RenetClientPlugin,
 };
+use bevy_simple_text_input::TextInputPlugin;
 use camera::CameraPlugin;
 use grid_mouse::*;
 use hud::{FarmText, HUDPlugin, PlacementModeText, TurnText};
@@ -46,10 +47,9 @@ fn main() {
         AssetsPlugin,
         RenetClientPlugin,
         NetcodeClientPlugin,
+        TextInputPlugin,
     ));
     app.add_event::<TileEvent>().add_event::<ClientEvent>();
-
-
 
     app.insert_resource(EntityTable {
         tiles: HashMap::default(),
@@ -62,8 +62,11 @@ fn main() {
         .add_systems(
             Update,
             (
-                register_event.map(noop).run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
-                receive_events_from_server.run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
+                register_event
+                    .map(noop)
+                    .run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
+                receive_events_from_server
+                    .run_if(in_state(ClientState::Game).or_else(in_state(ClientState::Terrain))),
                 start_game.run_if(in_state(ClientState::Lobby)),
                 panic_on_error_system,
                 close_on_esc,
@@ -229,6 +232,19 @@ fn receive_events_from_server(
                 for (pos, mut image) in tiles.iter_mut() {
                     *image = assets.get(grid.get_tile(pos.as_grid_index()));
                 }
+
+                turn_text.iter_mut().for_each(|mut t| {
+                    t.sections[1].value = "red".into();
+                    t.sections[1].style.color = Color::RED;
+                });
+
+                terrain_text.iter_mut().for_each(|mut t| {
+                    t.sections[1].value = "Mountain".into();
+                });
+
+                farms_text.iter_mut().for_each(|mut t| {
+                    t.sections[1].value = "0".into();
+                });
             }
             ClientEvent::TileChanges(changes) => changes.iter().for_each(|change| {
                 if let Some((_, mut image)) = tiles
